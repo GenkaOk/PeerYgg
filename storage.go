@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"os"
 )
@@ -14,15 +13,16 @@ func LoadLocal(path string) ([]string, error) {
 		}
 		return nil, err
 	}
-	return ParsePeersFromJSON(b)
+
+	src, err := ParsePeerSourceJSON(b)
+	if err != nil {
+		return nil, err
+	}
+	return ExtractPeerStrings(FlattenPeerSource(src)), nil
 }
 
-func SaveLocal(path string, peers []string) error {
-	b, err := json.MarshalIndent(peers, "", "  ")
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(path, b, 0644)
+func SaveLocal(path string, raw []byte) error {
+	return ioutil.WriteFile(path, raw, 0644)
 }
 
 func FetchURL(url string) ([]byte, error) {

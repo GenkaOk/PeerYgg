@@ -7,41 +7,110 @@ import (
 	"strings"
 )
 
-func ParsePeersFromJSON(b []byte) ([]string, error) {
-	var root interface{}
-	if err := json.Unmarshal(b, &root); err != nil {
-		return nil, err
+func ParsePeerSourceJSON(b []byte) (*PeerSource, error) {
+	var raw map[string]map[string][]string
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return nil, fmt.Errorf("unsupported peers JSON format: %w", err)
 	}
-	var raw []string
-	extractStringsFromInterface(root, &raw)
-	if len(raw) == 0 {
-		return nil, fmt.Errorf("no peer strings found in JSON")
+
+	src := &PeerSource{
+		Servers: make([]PeerServer, 0),
+		RawJSON: append(json.RawMessage(nil), b...),
 	}
-	return UniqueSorted(raw), nil
+
+	regions := make([]string, 0, len(raw))
+	for region := range raw {
+		regions = append(regions, region)
+	}
+	sort.Strings(regions)
+
+	for _, region := range regions {
+		countriesMap := raw[region]
+
+		countries := make([]string, 0, len(countriesMap))
+		for country := range countriesMap {
+			countries = append(countries, country)
+		}
+		sort.Strings(countries)
+
+		for _, country := range countries {
+			peers := UniqueSorted(countriesMap[country])
+			if len(peers) == 0 {
+				continue
+			}
+
+			src.Servers = append(src.Servers, PeerServer{
+				Region:  strings.TrimSpace(region),
+				Country: strings.TrimSpace(country),
+				Peers:   peers,
+			})
+		}
+	}
+
+	if len(src.Servers) == 0 {
+		return nil, fmt.Errorf("no peers found in JSON")
+	}
+
+	return src, nil
 }
 
-func extractStringsFromInterface(v interface{}, out *[]string) {
-	switch t := v.(type) {
-	case string:
-		s := strings.TrimSpace(t)
-		if s != "" {
-			*out = append(*out, s)
-		}
-	case []interface{}:
-		for _, it := range t {
-			extractStringsFromInterface(it, out)
-		}
-	case map[string]interface{}:
-		for _, it := range t {
-			extractStringsFromInterface(it, out)
+func FlattenPeerSource(src *PeerSource) []PeerInfo {
+	if src == nil {
+		return nil
+	}
+
+	out := make([]PeerInfo, 0)
+	seen := make(map[string]struct{})
+
+	for idx, server := range src.Servers {
+		serverID := fmt.Sprintf("%s|%s|%d", server.Region, server.Country, idx)
+		for _, peer := range server.Peers {
+			peer = strings.TrimSpace(peer)
+			if peer == "" {
+				continue
+			}
+
+			key := serverID + "|" + peer
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+
+			out = append(out, PeerInfo{
+				Peer:     peer,
+				Region:   server.Region,
+				Country:  server.Country,
+				ServerID: serverID,
+			})
 		}
 	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Region != out[j].Region {
+			return out[i].Region < out[j].Region
+		}
+		if out[i].Country != out[j].Country {
+			return out[i].Country < out[j].Country
+		}
+		return out[i].Peer < out[j].Peer
+	})
+
+	return out
+}
+
+func ExtractPeerStrings(peers []PeerInfo) []string {
+	out := make([]string, 0, len(peers))
+	for _, p := range peers {
+		out = append(out, p.Peer)
+	}
+	return out
 }
 
 func UniqueSorted(in []string) []string {
 	seen := make(map[string]struct{}, len(in))
 	out := make([]string, 0, len(in))
 	for _, s := range in {
+		s = strings.TrimSpace(s)
 		if s == "" {
 			continue
 		}

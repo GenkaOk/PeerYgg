@@ -27,7 +27,6 @@ func fetchURLInternal(url string) ([]byte, error) {
 
 // ParseAddress парсит адрес и возвращает хост, порт и схему
 func ParseAddress(addr string) (host string, port string, scheme string, err error) {
-	// Извлечь схему
 	if idx := strings.Index(addr, "://"); idx != -1 {
 		scheme = addr[:idx]
 		addr = addr[idx+3:]
@@ -35,41 +34,34 @@ func ParseAddress(addr string) (host string, port string, scheme string, err err
 		scheme = "tcp"
 	}
 
-	// Удалить query params
 	if idx := strings.Index(addr, "?"); idx != -1 {
 		addr = addr[:idx]
 	}
 
-	// Удалить path
 	if idx := strings.Index(addr, "/"); idx != -1 {
 		addr = addr[:idx]
 	}
 
-	// Парсить host:port
 	host, port, err = net.SplitHostPort(addr)
 	if err != nil {
 		return "", "", "", fmt.Errorf("invalid host:port (%s): %v", addr, err)
 	}
 
-	// Если это hostname, резолвим его в IP
 	host = normalizeHost(host)
 
 	return host, port, scheme, nil
 }
 
 func normalizeHost(host string) string {
-	// Попытаться резолвить hostname в IP
 	if ip := net.ParseIP(host); ip != nil {
 		return ip.String()
 	}
 
-	// Если это hostname, резолвим
 	ips, err := net.LookupIP(host)
 	if err == nil && len(ips) > 0 {
 		return ips[0].String()
 	}
 
-	// Если не удалось резолвить, возвращаем как есть
 	return host
 }
 
@@ -91,9 +83,9 @@ func DialPeer(ctx context.Context, addr string, timeout time.Duration) (time.Dur
 	return lat, host, scheme, nil
 }
 
-func MeasureAll(peers []string, concurrency int, timeoutSec int, progressType ProgressType) []Result {
+func MeasureAll(peers []PeerInfo, concurrency int, timeoutSec int, progressType ProgressType) []Result {
 	var wg sync.WaitGroup
-	inCh := make(chan string, concurrency)
+	inCh := make(chan PeerInfo, concurrency)
 	outCh := make(chan Result, concurrency)
 	sem := make(chan struct{}, concurrency)
 
@@ -113,15 +105,17 @@ func MeasureAll(peers []string, concurrency int, timeoutSec int, progressType Pr
 			defer wg.Done()
 			for p := range inCh {
 				sem <- struct{}{}
-				lat, host, scheme, err := DialPeer(ctx, p, time.Duration(timeoutSec)*time.Second)
+				lat, host, scheme, err := DialPeer(ctx, p.Peer, time.Duration(timeoutSec)*time.Second)
 
 				success := err == nil
 				if success {
 					outCh <- Result{
-						Peer:    p,
+						Peer:    p.Peer,
 						Latency: lat,
 						Host:    host,
 						Scheme:  scheme,
+						Region:  p.Region,
+						Country: p.Country,
 					}
 				}
 
@@ -172,6 +166,8 @@ func GroupByHost(results []Result) []ServerGroup {
 			groups[r.Host] = &ServerGroup{
 				Host:        r.Host,
 				BestLatency: r.Latency,
+				Region:      r.Region,
+				Country:     r.Country,
 				Connections: []Connection{},
 			}
 		}
@@ -181,25 +177,25 @@ func GroupByHost(results []Result) []ServerGroup {
 			Peer:    r.Peer,
 			Scheme:  r.Scheme,
 			Latency: r.Latency,
+			Region:  r.Region,
+			Country: r.Country,
 		})
 
-		// Обновить лучшую задержку
 		if r.Latency < group.BestLatency {
 			group.BestLatency = r.Latency
+			group.Region = r.Region
+			group.Country = r.Country
 		}
 	}
 
-	// Конвертировать в слайс
 	var serverGroups []ServerGroup
 	for _, g := range groups {
-		// Сортировать подключения по задержке
 		sort.Slice(g.Connections, func(i, j int) bool {
 			return g.Connections[i].Latency < g.Connections[j].Latency
 		})
 		serverGroups = append(serverGroups, *g)
 	}
 
-	// Сортировать группы по лучшей задержке
 	sort.Slice(serverGroups, func(i, j int) bool {
 		return serverGroups[i].BestLatency < serverGroups[j].BestLatency
 	})
@@ -214,7 +210,6 @@ func GetBestPeersPerServer(serverGroups []ServerGroup, topN int) []string {
 		if i >= topN {
 			break
 		}
-		// Возвращаем пир с лучшей задержкой
 		if len(group.Connections) > 0 {
 			result = append(result, group.Connections[0].Peer)
 		}
