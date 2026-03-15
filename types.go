@@ -21,6 +21,15 @@ const (
 	FullProgress
 )
 
+type OutputFormat string
+
+const (
+	OutputCurrent OutputFormat = "current"
+	OutputJSON    OutputFormat = "json"
+	OutputTable   OutputFormat = "table"
+	OutputConfig  OutputFormat = "config"
+)
+
 type PeerSource struct {
 	Servers []PeerServer `json:"servers"`
 	RawJSON json.RawMessage
@@ -75,6 +84,7 @@ type Config struct {
 	TopN         int
 	GroupByHost  bool
 	ProgressType ProgressType
+	OutputFormat OutputFormat
 }
 
 type ProgressTracker struct {

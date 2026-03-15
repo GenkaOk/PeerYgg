@@ -19,10 +19,12 @@ func LoadConfig() *Config {
 	timeout := flag.Int("t", DefaultTimeoutSec, "timeout per ping in seconds")
 	groupByHost := flag.Bool("group", false, "group peers by host and select best connection per server")
 	progressMode := flag.String("progress", "full", "progress mode: [n]one|[s]imple|[f]ull")
+	outputFormat := flag.String("output", "current", "output format: current|json|table|config")
 
 	flag.Parse()
 
 	progressType := parseProgressMode(*progressMode)
+	format := parseOutputFormat(*outputFormat)
 
 	return &Config{
 		URL:          getEnv("PEERS_URL", DefaultURL),
@@ -35,6 +37,7 @@ func LoadConfig() *Config {
 		TopN:         *n,
 		GroupByHost:  *groupByHost,
 		ProgressType: progressType,
+		OutputFormat: format,
 	}
 }
 
@@ -57,9 +60,23 @@ func parseProgressMode(mode string) ProgressType {
 	case "simple":
 		return SimpleProgress
 	default:
-		// Значение по умолчанию, если передано неправильное значение
 		return SimpleProgress
 	}
 
 	return FullProgress
+}
+
+func parseOutputFormat(format string) OutputFormat {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "json":
+		return OutputJSON
+	case "table":
+		return OutputTable
+	case "config":
+		return OutputConfig
+	case "current":
+		fallthrough
+	default:
+		return OutputCurrent
+	}
 }
