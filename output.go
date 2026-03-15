@@ -5,34 +5,29 @@ func printResults(results []Result, topN int, format OutputFormat) {
 
 	switch format {
 	case OutputJSON:
-		writeResultsJSON(results)
+		writeResultsJSON(results) // Выводим все записи
 	case OutputTable:
-		writeResultsTable(results)
+		writeResultsTable(results) // Выводим все записи
 	case OutputConfig:
-		writeConfigPeers(extractPeersFromResults(topResults))
+		writeConfigPeers(topResults)
 	default:
 		writeResultsCurrent(topResults)
 	}
 }
 
 func printGroupedResults(results []Result, topN int, format OutputFormat) {
-	serverGroups := GroupByHost(results)
-
-	top := topN
-	if top > len(serverGroups) {
-		top = len(serverGroups)
-	}
-	topGroups := serverGroups[:top]
+	groupedResults := GroupByHost(results)
+	topGroupedResults := limitResults(groupedResults, topN)
 
 	switch format {
 	case OutputJSON:
-		writeGroupsJSON(topGroups)
+		writeResultsJSON(groupedResults) // Выводим все записи
 	case OutputTable:
-		writeGroupsTable(topGroups)
+		writeResultsTable(groupedResults) // Выводим все записи
 	case OutputConfig:
-		writeConfigPeers(GetBestPeersPerServer(topGroups, topN))
+		writeConfigPeers(topGroupedResults)
 	default:
-		writeGroupsCurrent(topGroups, topN)
+		writeGroupsCurrent(BuildServerGroups(topGroupedResults), topN)
 	}
 }
 

@@ -3,46 +3,123 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
 func writeResultsTable(results []Result) {
-	fmt.Fprintln(os.Stdout, "N | LATENCY_MS | SCHEME | REGION | COUNTRY | HOST | PEER")
-	fmt.Fprintln(os.Stdout, strings.Repeat("-", 120))
+	headers := []string{"№", "Latency", "Region", "Country", "Peer URI"}
+	rows := make([][]string, 0, len(results))
+
 	for i, r := range results {
-		fmt.Fprintf(
-			os.Stdout,
-			"%d | %d | %s | %s | %s | %s | %s\n",
-			i+1,
-			r.Latency.Milliseconds(),
-			r.Scheme,
+		rows = append(rows, []string{
+			strconv.Itoa(i + 1),
+			fmt.Sprintf("%d ms", r.Latency.Milliseconds()),
 			r.Region,
 			r.Country,
-			r.Host,
 			r.Peer,
-		)
+		})
 	}
-	fmt.Fprintln(os.Stdout, "N | LATENCY_MS | SCHEME | REGION | COUNTRY | HOST | PEER")
+
+	writeAlignedTable(headers, rows)
 }
 
 func writeGroupsTable(groups []ServerGroup) {
-	fmt.Fprintln(os.Stdout, "N | LATENCY_MS | REGION | COUNTRY | HOST | CONNECTIONS | BEST_PEER")
-	fmt.Fprintln(os.Stdout, strings.Repeat("-", 120))
+	headers := []string{"№", "Latency", "Region", "Country", "Host", "Connections", "Best Peer"}
+	rows := make([][]string, 0, len(groups))
+
 	for i, g := range groups {
 		bestPeer := ""
 		if len(g.Connections) > 0 {
 			bestPeer = g.Connections[0].Peer
 		}
-		fmt.Fprintf(
-			os.Stdout,
-			"%d | %d | %s | %s | %s | %d | %s\n",
-			i+1,
-			g.BestLatency.Milliseconds(),
+
+		rows = append(rows, []string{
+			strconv.Itoa(i + 1),
+			fmt.Sprintf("%d ms", g.BestLatency.Milliseconds()),
 			g.Region,
 			g.Country,
 			g.Host,
-			len(g.Connections),
+			strconv.Itoa(len(g.Connections)),
 			bestPeer,
-		)
+		})
 	}
+
+	writeAlignedTable(headers, rows)
+}
+
+func writeAlignedTable(headers []string, rows [][]string) {
+	widths := make([]int, len(headers))
+	for i, h := range headers {
+		widths[i] = len(h)
+	}
+
+	for _, row := range rows {
+		for i := 0; i < len(headers) && i < len(row); i++ {
+			if len(row[i]) > widths[i] {
+				widths[i] = len(row[i])
+			}
+		}
+	}
+
+	printSeparate(widths, "=")
+	printAlignedRow(headers, widths, false)
+	printSeparate(widths, "-")
+
+	for i := len(rows) - 1; i >= 0; i-- {
+		printAlignedRow(rows[i], widths, false)
+	}
+
+	printSeparate(widths, "-")
+	printAlignedRow(headers, widths, false)
+	printSeparate(widths, "=")
+}
+
+func printSeparate(widths []int, sep string) {
+	if sep == "" {
+		sep = "-"
+	}
+
+	totalWidth := 0
+	for i, w := range widths {
+		totalWidth += w
+		if i > 0 {
+			totalWidth += 3
+		}
+	}
+
+	fmt.Fprintln(os.Stdout, strings.Repeat(sep, totalWidth))
+}
+
+func printAlignedRow(cols []string, widths []int, center bool) {
+	for i := range widths {
+		val := ""
+		if i < len(cols) {
+			val = cols[i]
+		}
+
+		if i > 0 {
+			fmt.Fprint(os.Stdout, " | ")
+		}
+
+		if center {
+			fmt.Fprint(os.Stdout, centerText(val, widths[i]))
+			continue
+		}
+
+		fmt.Fprintf(os.Stdout, "%-*s", widths[i], val)
+	}
+	fmt.Fprintln(os.Stdout)
+}
+
+func centerText(s string, width int) string {
+	if len(s) >= width {
+		return s
+	}
+
+	padding := width - len(s)
+	left := padding / 2
+	right := padding - left
+
+	return strings.Repeat(" ", left) + s + strings.Repeat(" ", right)
 }

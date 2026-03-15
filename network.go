@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -13,7 +14,14 @@ import (
 )
 
 func fetchURLInternal(url string) ([]byte, error) {
-	client := &http.Client{Timeout: time.Second * HTTPTimeoutSecs}
+	client := &http.Client{
+		Timeout: time.Second * HTTPTimeoutSecs,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
 	resp, err := client.Get(url)
 	if err != nil {
 		return nil, err
@@ -157,8 +165,31 @@ func MeasureAll(peers []PeerInfo, concurrency int, timeoutSec int, progressType 
 	return res
 }
 
-// GroupByHost группирует результаты по хостам, выбирая лучшую задержку
-func GroupByHost(results []Result) []ServerGroup {
+// GroupByHost возвращает лучший Result для каждого host.
+func GroupByHost(results []Result) []Result {
+	bestByHost := make(map[string]Result)
+
+	for _, r := range results {
+		best, exists := bestByHost[r.Host]
+		if !exists || r.Latency < best.Latency {
+			bestByHost[r.Host] = r
+		}
+	}
+
+	grouped := make([]Result, 0, len(bestByHost))
+	for _, r := range bestByHost {
+		grouped = append(grouped, r)
+	}
+
+	sort.Slice(grouped, func(i, j int) bool {
+		return grouped[i].Latency < grouped[j].Latency
+	})
+
+	return grouped
+}
+
+// BuildServerGroups строит подробные группы для расширенного вывода.
+func BuildServerGroups(results []Result) []ServerGroup {
 	groups := make(map[string]*ServerGroup)
 
 	for _, r := range results {

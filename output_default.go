@@ -27,9 +27,9 @@ func writeResultsCurrent(results []Result) {
 	_ = enc.Encode(extractPeersFromResults(results))
 }
 
-func writeGroupsCurrent(topGroups []ServerGroup, topN int) {
+func writeGroupsCurrent(groups []ServerGroup, topN int) {
 	fmt.Fprintln(os.Stderr, "=== Top Servers (Grouped by Host) ===")
-	for i, group := range topGroups {
+	for i, group := range groups {
 		fmt.Fprintf(
 			os.Stderr,
 			"%2d. %s — %d ms (%d connections) [%s, %s]\n",
@@ -55,7 +55,7 @@ func writeGroupsCurrent(topGroups []ServerGroup, topN int) {
 	}
 	fmt.Fprintln(os.Stderr)
 
-	outPeers := GetBestPeersPerServer(topGroups, topN)
+	outPeers := GetBestPeersPerServer(groups, topN)
 
 	fmt.Fprintln(os.Stderr, "=== Best Peer per Server (Output) ===")
 	for i, p := range outPeers {
