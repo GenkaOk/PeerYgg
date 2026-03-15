@@ -10,11 +10,21 @@ const (
 	DefaultTimeoutSec  = 1
 )
 
+type ProgressType int
+
+const (
+	WithoutProgress ProgressType = iota
+	SimpleProgress
+	FullProgress
+)
+
 type Result struct {
 	Peer    string        `json:"peer"`
 	Latency time.Duration `json:"latency_ms"`
-	Host    string        `json:"host"` // IP или hostname
+	Host    string        `json:"host"`
 	Scheme  string        `json:"scheme"`
+	Region  string        `json:"region"`
+	Country string        `json:"country"`
 }
 
 type ServerGroup struct {
@@ -30,13 +40,23 @@ type Connection struct {
 }
 
 type Config struct {
-	URL         string
-	Store       string
-	AddCmd      string
-	RemoveCmd   string
-	DryRun      bool
-	Concurrency int
-	TimeoutSec  int
-	TopN        int
-	GroupByHost bool // Группировать по хосту
+	URL          string
+	Store        string
+	AddCmd       string
+	RemoveCmd    string
+	DryRun       bool
+	Concurrency  int
+	TimeoutSec   int
+	TopN         int
+	GroupByHost  bool
+	ProgressType ProgressType
+}
+
+type ProgressTracker struct {
+	Total        int
+	Completed    int
+	Successful   int
+	Failed       int
+	startTime    time.Time
+	progressType ProgressType
 }

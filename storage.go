@@ -26,7 +26,6 @@ func SaveLocal(path string, peers []string) error {
 }
 
 func FetchURL(url string) ([]byte, error) {
-	// Можно вынести в отдельный файл http.go если нужна доп логика
 	return fetchURLInternal(url)
 }
 

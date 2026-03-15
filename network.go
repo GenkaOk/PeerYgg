@@ -91,11 +91,19 @@ func DialPeer(ctx context.Context, addr string, timeout time.Duration) (time.Dur
 	return lat, host, scheme, nil
 }
 
-func MeasureAll(peers []string, concurrency int, timeoutSec int) []Result {
+func MeasureAll(peers []string, concurrency int, timeoutSec int, progressType ProgressType) []Result {
 	var wg sync.WaitGroup
 	inCh := make(chan string, concurrency)
 	outCh := make(chan Result, concurrency)
 	sem := make(chan struct{}, concurrency)
+
+	var progressMutex sync.Mutex
+	var progress *ProgressTracker
+	showProgress := false
+	if progressType != WithoutProgress {
+		progress = NewProgressTracker(len(peers), progressType)
+		showProgress = true
+	}
 
 	ctx := context.Background()
 
@@ -106,7 +114,9 @@ func MeasureAll(peers []string, concurrency int, timeoutSec int) []Result {
 			for p := range inCh {
 				sem <- struct{}{}
 				lat, host, scheme, err := DialPeer(ctx, p, time.Duration(timeoutSec)*time.Second)
-				if err == nil {
+
+				success := err == nil
+				if success {
 					outCh <- Result{
 						Peer:    p,
 						Latency: lat,
@@ -114,6 +124,13 @@ func MeasureAll(peers []string, concurrency int, timeoutSec int) []Result {
 						Scheme:  scheme,
 					}
 				}
+
+				if showProgress {
+					progressMutex.Lock()
+					progress.Increment(success)
+					progressMutex.Unlock()
+				}
+
 				<-sem
 			}
 		}()
@@ -135,6 +152,11 @@ func MeasureAll(peers []string, concurrency int, timeoutSec int) []Result {
 	for r := range outCh {
 		res = append(res, r)
 	}
+
+	if showProgress && progress != nil {
+		progress.Finish()
+	}
+
 	sort.Slice(res, func(i, j int) bool {
 		return res[i].Latency < res[j].Latency
 	})
