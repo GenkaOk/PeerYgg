@@ -8,13 +8,18 @@ import (
 )
 
 func writeResultsTable(results []Result) {
-	headers := []string{"№", "Latency", "Region", "Country", "Peer URI"}
+	headers := []string{"№", "Latency", "Hops", "Region", "Country", "Peer URI"}
 	rows := make([][]string, 0, len(results))
 
 	for i, r := range results {
+		hopsStr := strconv.Itoa(r.Hops)
+		if r.Hops <= 0 {
+			hopsStr = "-"
+		}
 		rows = append(rows, []string{
 			strconv.Itoa(i + 1),
 			fmt.Sprintf("%d ms", r.Latency.Milliseconds()),
+			hopsStr,
 			r.Region,
 			r.Country,
 			r.Peer,

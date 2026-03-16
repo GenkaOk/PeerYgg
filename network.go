@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
+	"os/exec"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -30,7 +32,7 @@ func fetchURLInternal(url string) ([]byte, error) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
-	return ioutil.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
 }
 
 // ParseAddress парсит адрес и возвращает хост, порт и схему
@@ -87,7 +89,8 @@ func DialPeer(ctx context.Context, addr string, timeout time.Duration) (time.Dur
 	if err != nil {
 		return 0, "", "", err
 	}
-	_ = conn.Close()
+	defer conn.Close()
+
 	return lat, host, scheme, nil
 }
 
@@ -192,7 +195,9 @@ func GroupByHost(results []Result) []Result {
 func BuildServerGroups(results []Result) []ServerGroup {
 	groups := make(map[string]*ServerGroup)
 
-	for _, r := range results {
+	// Обновляем Hops в соединениях групп, если они изменились
+	for i := range results {
+		r := results[i]
 		if _, exists := groups[r.Host]; !exists {
 			groups[r.Host] = &ServerGroup{
 				Host:        r.Host,
@@ -208,6 +213,7 @@ func BuildServerGroups(results []Result) []ServerGroup {
 			Peer:    r.Peer,
 			Scheme:  r.Scheme,
 			Latency: r.Latency,
+			Hops:    r.Hops,
 			Region:  r.Region,
 			Country: r.Country,
 		})
@@ -246,4 +252,33 @@ func GetBestPeersPerServer(serverGroups []ServerGroup, topN int) []string {
 		}
 	}
 	return result
+}
+
+// TraceHops выполняет traceroute до хоста и возвращает количество хопов.
+func TraceHops(ctx context.Context, host string) int {
+	// Используем -m 20 для ограничения максимального количества хопов (быстрее)
+	// -w 1 для таймаута ожидания ответа 1 сек
+	// -q 1 для отправки только одного пакета на каждый хоп
+	cmd := exec.CommandContext(ctx, "traceroute", "-m", "20", "-w", "1", "-q", "1", host)
+	out, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+
+	lines := strings.Split(string(out), "\n")
+	lastHop := 0
+	// Регулярное выражение для поиска номера хопа в начале строки
+	re := regexp.MustCompile(`^\s*(\d+)\s+`)
+
+	for _, line := range lines {
+		matches := re.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			hop, _ := fmt.Sscanf(matches[1], "%d", &lastHop)
+			if hop > 0 {
+				// Продолжаем, чтобы найти последний номер
+			}
+		}
+	}
+
+	return lastHop
 }

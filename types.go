@@ -11,6 +11,7 @@ const (
 	HTTPTimeoutSecs    = 1
 	DefaultConcurrency = 30
 	DefaultTimeoutSec  = 1
+	DefaultTraceCount  = 5
 )
 
 type ProgressType int
@@ -51,6 +52,7 @@ type PeerInfo struct {
 type Result struct {
 	Peer    string        `json:"peer"`
 	Latency time.Duration `json:"latency_ms"`
+	Hops    int           `json:"hops,omitzero"`
 	Host    string        `json:"host"`
 	Scheme  string        `json:"scheme"`
 	Region  string        `json:"region"`
@@ -69,6 +71,7 @@ type Connection struct {
 	Peer    string        `json:"peer"`
 	Scheme  string        `json:"scheme"`
 	Latency time.Duration `json:"latency_ms"`
+	Hops    int           `json:"hops,omitzero"`
 	Region  string        `json:"region"`
 	Country string        `json:"country"`
 }
@@ -82,6 +85,7 @@ type Config struct {
 	Concurrency  int
 	TimeoutSec   int
 	TopN         int
+	TraceCount   int
 	GroupByHost  bool
 	ProgressType ProgressType
 	OutputFormat OutputFormat

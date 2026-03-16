@@ -9,13 +9,18 @@ import (
 func writeResultsCurrent(results []Result) {
 	fmt.Fprintln(os.Stderr, "=== Top Peers ===")
 	for i, r := range results {
+		hopsInfo := ""
+		if r.Hops > 0 {
+			hopsInfo = fmt.Sprintf(" (%d hops)", r.Hops)
+		}
 		fmt.Fprintf(
 			os.Stderr,
-			"%2d. %s (%s) — %d ms [%s, %s]\n",
+			"%2d. %s (%s) — %d ms%s [%s, %s]\n",
 			i+1,
 			r.Peer,
 			r.Scheme,
 			r.Latency.Milliseconds(),
+			hopsInfo,
 			r.Region,
 			r.Country,
 		)
@@ -41,13 +46,18 @@ func writeGroupsCurrent(groups []ServerGroup, topN int) {
 			group.Country,
 		)
 		for j, conn := range group.Connections {
+			hopsInfo := ""
+			if conn.Hops > 0 {
+				hopsInfo = fmt.Sprintf(" (%d hops)", conn.Hops)
+			}
 			fmt.Fprintf(
 				os.Stderr,
-				"    [%d] %s (%s) — %d ms [%s, %s]\n",
+				"    [%d] %s (%s) — %d ms%s [%s, %s]\n",
 				j+1,
 				conn.Peer,
 				conn.Scheme,
 				conn.Latency.Milliseconds(),
+				hopsInfo,
 				conn.Region,
 				conn.Country,
 			)

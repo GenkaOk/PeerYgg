@@ -17,6 +17,7 @@ func LoadConfig() *Config {
 	n := flag.Int("n", 10, "number of fastest peers/servers to output")
 	concurrency := flag.Int("c", DefaultConcurrency, "concurrency for pings")
 	timeout := flag.Int("t", DefaultTimeoutSec, "timeout per ping in seconds")
+	traceCount := flag.Int("trace", DefaultTraceCount, "tracing count peers to calculate hops")
 	groupByHost := flag.Bool("group", false, "group peers by host and select best connection per server")
 	progressMode := flag.String("progress", "full", "progress mode: [n]one|[s]imple|[f]ull")
 	outputFormat := flag.String("output", "current", "output format: current|json|table|config")
@@ -34,6 +35,7 @@ func LoadConfig() *Config {
 		DryRun:       getEnv("DRY_RUN", "") == "1",
 		Concurrency:  *concurrency,
 		TimeoutSec:   *timeout,
+		TraceCount:   *traceCount,
 		TopN:         *n,
 		GroupByHost:  *groupByHost,
 		ProgressType: progressType,
