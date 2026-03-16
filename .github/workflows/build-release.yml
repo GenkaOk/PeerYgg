@@ -75,7 +75,7 @@ jobs:
         shell: bash
         run: |
           TAG="${GITHUB_REF_NAME}"
-          ASSET_NAME="${BINARY}-${TAG}-${{ matrix.build.name }}"
+          ASSET_NAME="${BINARY}-${{ matrix.build.name }}"
           STAGING="${RUNNER_TEMP}/${ASSET_NAME}"
           mkdir -p "${STAGING}"
           
