@@ -18,14 +18,16 @@
 
 PeerYgg — это инструмент для поиска и анализа пиров в сети Yggdrasil с минимальной задержкой.
 
-Программа автоматически обнаруживает доступные пиры и определяет количество сетевых переходов до каждого узла, помогая выбрать
+Программа автоматически обнаруживает доступные пиры и определяет количество сетевых переходов до каждого узла, помогая
+выбрать
 наиболее эффективные соединения.
 
 ## Основные возможности
 
 - **Измерение задержки** — определение минимальной задержки до каждого пира
 - **Анализ маршрута** — подсчёт количества переходов (traceroute) до целевых узлов
-- **Гибкие форматы вывода** — экспорт результатов в виде таблицы, конфигурационного файла или JSON для удобной интеграции и анализа
+- **Гибкие форматы вывода** — экспорт результатов в виде таблицы, конфигурационного файла или JSON для удобной
+  интеграции и анализа
 - **Группировка результатов** — объединение пиров по IP-адресу для более удобного просмотра и анализа
 
 ![demo](assets/demo.gif)
@@ -36,33 +38,30 @@ PeerYgg — это инструмент для поиска и анализа п
 
 ### Windows
 
-Скачайте <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-amd64.exe">готовый бинарный файл</a>
+Скачайте <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-amd64.zip">готовый
+бинарный файл</a>
 и запустите его в командной оболочке.
-
-#### PowerShell
-
-```shell
-curl -L -O https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-amd64.exe
-
-peerygg-windows-amd64
-```
 
 ### macOS
 
 #### Быстрый запуск (Intel)
 
 ```sh
-curl -LO https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-amd64
-chmod +x peerygg-darwin-amd64
-./peerygg-darwin-amd64
+curl -LO https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-amd64.tar.gz
+tar -xvf peerygg-darwin-amd64.tar.gz 
+cd peerygg-darwin-amd64
+
+./peerygg
 ```
 
 #### Быстрый запуск (Apple Silicon)
 
 ```sh
-curl -LO https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-arm64
-chmod +x peerygg-darwin-arm64
-./peerygg-darwin-arm64
+curl -LO https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-arm64.tar.gz
+tar -xvf peerygg-darwin-arm64.tar.gz 
+cd peerygg-darwin-arm64
+
+./peerygg
 ```
 
 ### Linux
@@ -70,9 +69,11 @@ chmod +x peerygg-darwin-arm64
 #### Быстрый запуск (Linux AMD64)
 
 ```sh
-curl -LO https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-amd64
-chmod +x peerygg-linux-amd64
-./peerygg-linux-amd64
+curl -LO https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-amd64.tar.gz
+tar -xvf peerygg-linux-amd64.tar.gz
+cd peerygg-linux-amd64
+
+./peerygg
 ```
 
 ### Сборка из исходного кода
@@ -92,15 +93,16 @@ go build .
 
 Утилита поддерживает следующие платформы:
 
-| Система                  | Файл                                                                                                                            |
-|--------------------------|----------------------------------------------------------------------------------------------------------------------------------|
-| **Windows**              | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-amd64.exe">peerygg-windows-amd64.exe</a> |
-| **Linux x64**            | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-amd64">peerygg-linux-amd64</a>             |
-| **Linux ARM**            | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-arm64">peerygg-linux-arm64</a>             |
-| **Linux MIPS**           | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-mips">peerygg-linux-mips</a>               |
-| **Linux MIPSLE**         | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-mipsle">peerygg-linux-mipsle</a>           |
-| **macOS (Intel)**        | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-amd64">peerygg-darwin-amd64</a>           |
-| **macOS (Apple Silicon)**| <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-arm64">peerygg-darwin-arm64</a>           |
+| Система                   | Файл                                                                                                                              | Протестировано |
+|---------------------------|-----------------------------------------------------------------------------------------------------------------------------------|----------------|
+| **Windows**               | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-amd64.zip">peerygg-windows-amd64.zip</a>     | **Yes**        |
+| **Windows x86**           | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-i686.zip">peerygg-windows-i686.zip</a>       | **Yes**        |
+| **Linux x64**             | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-amd64.tar.gz">peerygg-linux-amd64.tar.gz</a>   | **Yes**        |
+| **Linux ARM**             | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-arm64.tar.gz">peerygg-linux-arm64.tar.gz</a>   | No             |
+| **Linux MIPS**            | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-mips.tar.gz">peerygg-linux-mips.tar.gz</a>     | No             |
+| **Linux MIPSLE**          | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-mipsle.tar.gz">peerygg-linux-mipsle.tar.gz</a> | **Yes**        |
+| **MacOS (Intel)**         | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-amd64.tar.gz">peerygg-darwin-amd64.tar.gz</a> | **Yes**        |
+| **MacOs (Apple Silicon)** | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-arm64.tar.gz">peerygg-darwin-arm64.tar.gz</a> | **Yes**        |
 
 ### Режим командной строки
 
@@ -130,16 +132,17 @@ Usage of PeerYgg:
 
 #### Форматы вывода
 
-| Формат  | Назначение                                                               | Команда                         | Скриншот                                                                        |
-|---------|---------------------------------------------------------------------------|---------------------------------|---------------------------------------------------------------------------------|
-| Default | Стандартный формат вывода                                                 | `PeerYgg`                         | <a href="assets/example-default.jpg"><img src="assets/example-default.jpg"></a> |
-| Table   | Быстрый визуальный просмотр информации о пирах в терминале                | `PeerYgg -output table`           | <a href="assets/example-table.jpg"><img src="assets/example-table.jpg"></a>     |
-| Config  | Вывод в формате конфигурации Yggdrasil для интеграции с другими CLI-инструментами | `PeerYgg -output config`          | <a href="assets/example-config.jpg"><img src="assets/example-config.jpg"></a>   |
-| JSON    | Программный доступ к данным и интеграция с другими инструментами          | `PeerYgg -output json > out.json` | <a href="assets/example-json.jpg"><img src="assets/example-json.jpg"></a>       |
+| Формат  | Назначение                                                                        | Команда                           | Скриншот                                                                        |
+|---------|-----------------------------------------------------------------------------------|-----------------------------------|---------------------------------------------------------------------------------|
+| Default | Стандартный формат вывода                                                         | `peerygg`                         | <a href="assets/example-default.jpg"><img src="assets/example-default.jpg"></a> |
+| Table   | Быстрый визуальный просмотр информации о пирах в терминале                        | `peerygg -output table`           | <a href="assets/example-table.jpg"><img src="assets/example-table.jpg"></a>     |
+| Config  | Вывод в формате конфигурации Yggdrasil для интеграции с другими CLI-инструментами | `peerygg -output config`          | <a href="assets/example-config.jpg"><img src="assets/example-config.jpg"></a>   |
+| JSON    | Программный доступ к данным и интеграция с другими инструментами                  | `peerygg -output json > out.json` | <a href="assets/example-json.jpg"><img src="assets/example-json.jpg"></a>       |
 
 ---
 
 ## Лицензия
 
 MIT
+
 ```

@@ -36,33 +36,29 @@ most efficient connections.
 
 ### Windows
 
-Download <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-amd64.exe">binary file</a>
+Download <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-amd64.zip">binary file</a>
 and run in shell
-
-#### PowerShell
-
-```shell
-curl -L -O https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-amd64.exe
-
-peerygg-windows-amd64
-```
 
 ### macOS
 
 #### Quick Run (Intel)
 
 ```sh
-curl -LO https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-amd64
-chmod +x peerygg-darwin-amd64
-./peerygg-darwin-amd64
+curl -LO https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-amd64.tar.gz
+tar -xvf peerygg-darwin-amd64.tar.gz 
+cd peerygg-darwin-amd64
+
+./peerygg
 ```
 
 #### Quick Run (Apple Silicon)
 
 ```sh
-curl -LO https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-arm64
-chmod +x peerygg-darwin-arm64
-./peerygg-darwin-arm64
+curl -LO https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-arm64.tar.gz
+tar -xvf peerygg-darwin-arm64.tar.gz 
+cd peerygg-darwin-arm64
+
+./peerygg
 ```
 
 ### Linux
@@ -70,9 +66,11 @@ chmod +x peerygg-darwin-arm64
 #### Quick Run (Linux AMD64)
 
 ```sh
-curl -LO https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-amd64
-chmod +x peerygg-linux-amd64
-./peerygg-linux-amd64
+curl -LO https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-amd64.tar.gz
+tar -xvf peerygg-linux-amd64.tar.gz
+cd peerygg-linux-amd64
+
+./peerygg
 ```
 
 ### From source
@@ -92,15 +90,16 @@ go build .
 
 Utility supported next OS:
 
-| System                    | File                                                                                                                          |
-|---------------------------|-------------------------------------------------------------------------------------------------------------------------------|
-| **Windows**               | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-amd64.exe">peerygg-windows-amd64.exe</a> |
-| **Linux x64**             | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-amd64">peerygg-linux-amd64</a>             |
-| **Linux ARM**             | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-arm64">peerygg-linux-arm64</a>             |
-| **Linux MIPS**            | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-mips">peerygg-linux-mips</a>               |
-| **Linux MIPSLE**          | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-mipsle">peerygg-linux-mipsle</a>           |
-| **MacOS (Intel)**         | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-amd64">peerygg-darwin-amd64</a>           |
-| **MacOs (Apple Silicon)** | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-arm64">peerygg-darwin-arm64</a>           |
+| System                    | File                                                                                                                              | Tested  |
+|---------------------------|-----------------------------------------------------------------------------------------------------------------------------------|---------|
+| **Windows**               | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-amd64.zip">peerygg-windows-amd64.zip</a>     | **Yes** |
+| **Windows x86**           | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-i686.zip">peerygg-windows-i686.zip</a>       | **Yes** |
+| **Linux x64**             | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-amd64.tar.gz">peerygg-linux-amd64.tar.gz</a>   | **Yes** |
+| **Linux ARM**             | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-arm64.tar.gz">peerygg-linux-arm64.tar.gz</a>   | No      |
+| **Linux MIPS**            | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-mips.tar.gz">peerygg-linux-mips.tar.gz</a>     | No      |
+| **Linux MIPSLE**          | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-mipsle.tar.gz">peerygg-linux-mipsle.tar.gz</a> | **Yes** |
+| **MacOS (Intel)**         | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-amd64.tar.gz">peerygg-darwin-amd64.tar.gz</a> | **Yes** |
+| **MacOs (Apple Silicon)** | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-arm64.tar.gz">peerygg-darwin-arm64.tar.gz</a> | **Yes** |
 
 ### CLI mode
 
@@ -130,12 +129,12 @@ Usage of PeerYgg:
 
 #### Output Formats
 
-| Format  | Use Case                                                                       | Command                         | Screenshot                                                                      |
-|---------|--------------------------------------------------------------------------------|---------------------------------|---------------------------------------------------------------------------------|
-| Default | Default output                                                                 | `PeerYgg`                         | <a href="assets/example-default.jpg"><img src="assets/example-default.jpg"></a> 
-| Table   | Quick visual inspection of peer data in terminal                               | `PeerYgg -output table`           | <a href="assets/example-table.jpg"><img src="assets/example-table.jpg"></a>     
-| Config  | Output as Yggdrasil configuration files for integration with another CLI tools | `PeerYgg -output config`          | <a href="assets/example-config.jpg"><img src="assets/example-config.jpg"></a>   
-| JSON    | Programmatic access and integration with other tools                           | `PeerYgg -output json > out.json` | <a href="assets/example-json.jpg"><img src="assets/example-json.jpg"></a>       
+| Format  | Use Case                                                                       | Command                           | Screenshot                                                                      |
+|---------|--------------------------------------------------------------------------------|-----------------------------------|---------------------------------------------------------------------------------|
+| Default | Default output                                                                 | `peerygg`                         | <a href="assets/example-default.jpg"><img src="assets/example-default.jpg"></a> 
+| Table   | Quick visual inspection of peer data in terminal                               | `peerygg -output table`           | <a href="assets/example-table.jpg"><img src="assets/example-table.jpg"></a>     
+| Config  | Output as Yggdrasil configuration files for integration with another CLI tools | `peerygg -output config`          | <a href="assets/example-config.jpg"><img src="assets/example-config.jpg"></a>   
+| JSON    | Programmatic access and integration with other tools                           | `peerygg -output json > out.json` | <a href="assets/example-json.jpg"><img src="assets/example-json.jpg"></a>       
 
 ---
 
