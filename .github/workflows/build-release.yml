@@ -25,6 +25,18 @@ jobs:
           - name: linux-arm64
             os: linux
             arch: arm64
+          - name: linux-armv5
+            os: linux
+            arm: 5
+            arch: arm
+          - name: linux-armv6
+            os: linux
+            arm: 6
+            arch: arm
+          - name: linux-armv7
+            os: linux
+            arm: 7
+            arch: arm
           - name: linux-mipsle
             os: linux
             arch: mipsle
@@ -61,6 +73,7 @@ jobs:
       - name: Build ${{ matrix.build.name }}
         env:
           GOOS: ${{ matrix.build.os }}
+          GOARM: ${{ matrix.build.arm || '' }}
           GOARCH: ${{ matrix.build.arch }}
           GOMIPS: ${{ matrix.build.gomips || '' }}
           GOMAXPROCS: 1
