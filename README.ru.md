@@ -29,6 +29,7 @@ PeerYgg — это инструмент для поиска и анализа п
 - **Гибкие форматы вывода** — экспорт результатов в виде таблицы, конфигурационного файла или JSON для удобной
   интеграции и анализа
 - **Группировка результатов** — объединение пиров по IP-адресу для более удобного просмотра и анализа
+- **Совместимость** - Хорошая совместимость с различными типами архитектур (x64, ARM, ARMv5-7, MIPS(LE))
 
 ![demo](assets/demo.gif)
 
@@ -95,14 +96,17 @@ go build .
 
 | Система                   | Файл                                                                                                                              | Протестировано |
 |---------------------------|-----------------------------------------------------------------------------------------------------------------------------------|----------------|
-| **Windows**               | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-amd64.zip">peerygg-windows-amd64.zip</a>     | **Yes**        |
-| **Windows x86**           | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-i686.zip">peerygg-windows-i686.zip</a>       | **Yes**        |
-| **Linux x64**             | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-amd64.tar.gz">peerygg-linux-amd64.tar.gz</a>   | **Yes**        |
-| **Linux ARM**             | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-arm64.tar.gz">peerygg-linux-arm64.tar.gz</a>   | No             |
-| **Linux MIPS**            | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-mips.tar.gz">peerygg-linux-mips.tar.gz</a>     | No             |
-| **Linux MIPSLE**          | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-mipsle.tar.gz">peerygg-linux-mipsle.tar.gz</a> | **Yes**        |
-| **MacOS (Intel)**         | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-amd64.tar.gz">peerygg-darwin-amd64.tar.gz</a> | **Yes**        |
-| **MacOs (Apple Silicon)** | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-arm64.tar.gz">peerygg-darwin-arm64.tar.gz</a> | **Yes**        |
+| **Windows**               | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-amd64.zip">peerygg-windows-amd64.zip</a>     | **Да**         |
+| **Windows x86**           | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-windows-i686.zip">peerygg-windows-i686.zip</a>       | **Да**         |
+| **Linux x64**             | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-amd64.tar.gz">peerygg-linux-amd64.tar.gz</a>   | **Да**         |
+| **Linux ARM**             | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-arm64.tar.gz">peerygg-linux-arm64.tar.gz</a>   | Нет            |
+| **Linux MIPS**            | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-mips.tar.gz">peerygg-linux-mips.tar.gz</a>     | Нет            |
+| **Linux MIPSLE**          | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-mipsle.tar.gz">peerygg-linux-mipsle.tar.gz</a> | **Да**         |
+| **Linux ARMv5**           | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-armv5.tar.gz">peerygg-linux-armv5.tar.gz</a>   | Нет            |
+| **Linux ARMv6**           | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-armv6.tar.gz">peerygg-linux-armv6.tar.gz</a>   | Нет            |
+| **Linux ARMv7**           | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-armv7.tar.gz">peerygg-linux-armv7.tar.gz</a>   | **Да**         |
+| **MacOS (Intel)**         | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-amd64.tar.gz">peerygg-darwin-amd64.tar.gz</a> | **Да**         |
+| **MacOs (Apple Silicon)** | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-arm64.tar.gz">peerygg-darwin-arm64.tar.gz</a> | **Да**         |
 
 ### Режим командной строки
 

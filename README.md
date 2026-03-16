@@ -27,6 +27,7 @@ most efficient connections.
 - **Routing analysis** — calculate hop count (traceroute) to target nodes
 - **Flexible output formats** — export results as table, configuration file, or JSON for easy integration and analysis
 - **Group results** — group peers by IP address for better organization and analysis
+- **Compatibility** - Good compatibility with various types of architectures (x64, ARM, ARMv5-7, MIPS(LE))
 
 ![demo](assets/demo.gif)
 
@@ -98,6 +99,9 @@ Utility supported next OS:
 | **Linux ARM**             | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-arm64.tar.gz">peerygg-linux-arm64.tar.gz</a>   | No      |
 | **Linux MIPS**            | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-mips.tar.gz">peerygg-linux-mips.tar.gz</a>     | No      |
 | **Linux MIPSLE**          | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-mipsle.tar.gz">peerygg-linux-mipsle.tar.gz</a> | **Yes** |
+| **Linux ARMv5**           | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-armv5.tar.gz">peerygg-linux-armv5.tar.gz</a>   | No      |
+| **Linux ARMv6**           | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-armv6.tar.gz">peerygg-linux-armv6.tar.gz</a>   | No      |
+| **Linux ARMv7**           | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-linux-armv7.tar.gz">peerygg-linux-armv7.tar.gz</a>   | **Yes** |
 | **MacOS (Intel)**         | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-amd64.tar.gz">peerygg-darwin-amd64.tar.gz</a> | **Yes** |
 | **MacOs (Apple Silicon)** | <a href="https://github.com/GenkaOk/PeerYgg/releases/latest/download/peerygg-darwin-arm64.tar.gz">peerygg-darwin-arm64.tar.gz</a> | **Yes** |
 
