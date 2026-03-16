@@ -16,12 +16,12 @@ import (
 	"time"
 )
 
-func fetchURLInternal(url string) ([]byte, error) {
+func fetchURLInternal(url string, cfg *Config) ([]byte, error) {
 	client := &http.Client{
 		Timeout: time.Second * HTTPTimeoutSecs,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
+				InsecureSkipVerify: cfg.InsecureSSL,
 			},
 		},
 	}

@@ -90,6 +90,7 @@ type Config struct {
 	GroupByHost  bool
 	ProgressType ProgressType
 	OutputFormat OutputFormat
+	InsecureSSL  bool
 
 	TraceCount   int
 	TraceMaxHops int

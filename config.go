@@ -25,6 +25,8 @@ func LoadConfig() *Config {
 	traceHops := flag.Int("trace-max-hops", DefaultTraceMaxHops, "max hops count for calculate")
 	traceTimeout := flag.Int("trace-timeout", DefaultTraceTimeout, "timeout in seconds for tracing all peers")
 
+	insecureSsl := flag.Bool("insecure", false, "allow skip SSL verification")
+
 	flag.Parse()
 
 	progressType := parseProgressMode(*progressMode)
@@ -42,6 +44,7 @@ func LoadConfig() *Config {
 		GroupByHost:  *groupByHost,
 		ProgressType: progressType,
 		OutputFormat: format,
+		InsecureSSL:  *insecureSsl,
 
 		TraceCount:   *traceCount,
 		TraceMaxHops: *traceHops,

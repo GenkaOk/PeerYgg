@@ -94,7 +94,7 @@ func loadPeersSource(cfg *Config) (*PeerSource, []PeerInfo, error) {
 	}
 
 	fmt.Fprintln(os.Stderr, "Fetching peers from URL...")
-	b, err := FetchURL(cfg.URL)
+	b, err := FetchURL(cfg.URL, cfg)
 	if err != nil {
 		return nil, nil, err
 	}
