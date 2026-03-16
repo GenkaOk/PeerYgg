@@ -37,6 +37,11 @@ jobs:
           - name: windows-amd64
             os: windows
             arch: amd64
+            go: '1.20'
+          - name: windows-i686
+            os: windows
+            arch: i686
+            go: '1.20'
           - name: darwin-amd64
             os: darwin
             arch: amd64
