@@ -11,6 +11,7 @@ permissions:
 
 env:
   CGO_ENABLED: 0
+  BINARY: peerygg
 
 jobs:
   build:
@@ -65,17 +66,54 @@ jobs:
           GOMAXPROCS: 1
         run: |
           mkdir -p build
-          OUTPUT_NAME="build/peerygg-${{ matrix.build.name }}"
+          OUTPUT_NAME="build/${BINARY}"
           [ "${{ matrix.build.os }}" = "windows" ] && OUTPUT_NAME="${OUTPUT_NAME}.exe"
           go build -o "${OUTPUT_NAME}" .
           ls -lh "${OUTPUT_NAME}"
 
+      - name: Package
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          ASSET_NAME="${BINARY}-${TAG}-${{ matrix.build.name }}"
+          STAGING="${RUNNER_TEMP}/${ASSET_NAME}"
+          mkdir -p "${STAGING}"
+          
+          if [[ "${{ matrix.build.os }}" == *"windows"* ]]; then
+            EXE_EXT=".exe"
+            ARCHIVE_EXT=".zip"
+            COMPRESS_CMD="7z a ${ASSET_NAME}${ARCHIVE_EXT} ${ASSET_NAME}"
+          else
+            EXE_EXT=""
+            ARCHIVE_EXT=".tar.gz"
+            COMPRESS_CMD="tar czf ${ASSET_NAME}${ARCHIVE_EXT} ${ASSET_NAME}"
+          fi
+          
+          cp "build/${BINARY}${EXE_EXT}" "${STAGING}/"
+          cp README.md LICENSE "${STAGING}/" 2>/dev/null || true
+          
+          cd "${RUNNER_TEMP}"
+          $COMPRESS_CMD
+          
+          # Generate per-asset SHA256 checksum file (consistent format for both tools)
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${ASSET_NAME}${ARCHIVE_EXT}" | awk '{print $1 "  " $2}' > "${ASSET_NAME}${ARCHIVE_EXT}.sha256"
+          elif command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 "${ASSET_NAME}${ARCHIVE_EXT}" | awk '{print $1 "  " $2}' > "${ASSET_NAME}${ARCHIVE_EXT}.sha256"
+          fi
+          
+          echo "ASSET=${ASSET_NAME}${ARCHIVE_EXT}" >> "$GITHUB_ENV"
+          echo "ASSET_PATH=${RUNNER_TEMP}/${ASSET_NAME}${ARCHIVE_EXT}" >> "$GITHUB_ENV"
+          echo "CHECKSUM_PATH=${RUNNER_TEMP}/${ASSET_NAME}${ARCHIVE_EXT}.sha256" >> "$GITHUB_ENV"
+
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.build.name }}
-          path: build/peerygg-*
-          retention-days: 7
+          name: ${{ env.ASSET }}
+          path: |
+            ${{ env.ASSET_PATH }}
+            ${{ env.CHECKSUM_PATH }}
 
   release:
     needs: build
@@ -90,16 +128,12 @@ jobs:
         with:
           path: artifacts
 
-      - name: Prepare files for release
-        run: |
-          mkdir -p release
-          find artifacts -type f -name "peerygg-*" -exec cp {} release/ \;
-          ls -lh release/
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*
-          draft: false
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
           generate_release_notes: true
+          files: |
+            artifacts/**/*.tar.gz
+            artifacts/**/*.zip
+            artifacts/**/*.sha256
