@@ -1,0 +1,100 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CGO_ENABLED: 0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build:
+          - name: linux-amd64
+            os: linux
+            arch: amd64
+          - name: linux-arm64
+            os: linux
+            arch: arm64
+          - name: linux-mipsle
+            os: linux
+            arch: mipsle
+            go: '1.20'
+            gomips: softfloat
+          - name: linux-mips
+            os: linux
+            arch: mips
+            go: '1.20'
+            gomips: softfloat
+          - name: windows-amd64
+            os: windows
+            arch: amd64
+          - name: darwin-amd64
+            os: darwin
+            arch: amd64
+          - name: darwin-arm64
+            os: darwin
+            arch: arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.build.go }}
+
+      - name: Build ${{ matrix.build.name }}
+        env:
+          GOOS: ${{ matrix.build.os }}
+          GOARCH: ${{ matrix.build.arch }}
+          GOMIPS: ${{ matrix.build.gomips || '' }}
+          GOMAXPROCS: 1
+        run: |
+          mkdir -p build
+          OUTPUT_NAME="build/peerygg-${{ matrix.build.name }}"
+          [ "${{ matrix.build.os }}" = "windows" ] && OUTPUT_NAME="${OUTPUT_NAME}.exe"
+          go build -o "${OUTPUT_NAME}" .
+          ls -lh "${OUTPUT_NAME}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.build.name }}
+          path: build/peerygg-*
+          retention-days: 7
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Prepare files for release
+        run: |
+          mkdir -p release
+          find artifacts -type f -name "peerygg-*" -exec cp {} release/ \;
+          ls -lh release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
+          generate_release_notes: true

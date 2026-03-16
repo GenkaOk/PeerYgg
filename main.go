@@ -51,17 +51,17 @@ func main() {
 	}
 	if traceCount > 0 {
 		fmt.Fprintf(os.Stderr, "Tracing top %d peers to calculate hops...\n", traceCount)
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // Уменьшаем общий таймаут, так как теперь параллельно
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TraceTimeout)*time.Second) // Уменьшаем общий таймаут, так как теперь параллельно
 		defer cancel()
 
 		var wg sync.WaitGroup
 		var completed int32
 
-		for i := range traceCount {
+		for i := 0; i < traceCount; i++ {
 			wg.Add(1)
 			go func(idx int) {
 				defer wg.Done()
-				results[idx].Hops = TraceHops(ctx, results[idx].Host)
+				results[idx].Hops = TraceHops(ctx, results[idx].Host, cfg.TraceMaxHops)
 				count := atomic.AddInt32(&completed, 1)
 				fmt.Fprintf(os.Stderr, "  [%d/%d] %s: %d hops\n", count, traceCount, results[idx].Host, results[idx].Hops)
 			}(i)

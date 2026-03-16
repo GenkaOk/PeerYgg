@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -255,11 +256,11 @@ func GetBestPeersPerServer(serverGroups []ServerGroup, topN int) []string {
 }
 
 // TraceHops выполняет traceroute до хоста и возвращает количество хопов.
-func TraceHops(ctx context.Context, host string) int {
+func TraceHops(ctx context.Context, host string, maxHops int) int {
 	// Используем -m 20 для ограничения максимального количества хопов (быстрее)
 	// -w 1 для таймаута ожидания ответа 1 сек
 	// -q 1 для отправки только одного пакета на каждый хоп
-	cmd := exec.CommandContext(ctx, "traceroute", "-m", "20", "-w", "1", "-q", "1", host)
+	cmd := exec.CommandContext(ctx, "traceroute", "-m", strconv.Itoa(maxHops), "-w", "1", "-q", "1", host)
 	out, err := cmd.Output()
 	if err != nil {
 		return 0

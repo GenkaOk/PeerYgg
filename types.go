@@ -6,12 +6,14 @@ import (
 )
 
 const (
-	DefaultURL         = "https://raw.githubusercontent.com/GenkaOk/public-peers/refs/heads/master/nodes.json"
-	LocalStore         = "peers.json"
-	HTTPTimeoutSecs    = 1
-	DefaultConcurrency = 30
-	DefaultTimeoutSec  = 1
-	DefaultTraceCount  = 5
+	DefaultURL          = "https://raw.githubusercontent.com/GenkaOk/public-peers/refs/heads/master/nodes.json"
+	LocalStore          = "peers.json"
+	HTTPTimeoutSecs     = 1
+	DefaultConcurrency  = 30
+	DefaultTimeoutSec   = 1
+	DefaultTraceCount   = 5
+	DefaultTraceMaxHops = 20
+	DefaultTraceTimeout = 30
 )
 
 type ProgressType int
@@ -85,10 +87,13 @@ type Config struct {
 	Concurrency  int
 	TimeoutSec   int
 	TopN         int
-	TraceCount   int
 	GroupByHost  bool
 	ProgressType ProgressType
 	OutputFormat OutputFormat
+
+	TraceCount   int
+	TraceMaxHops int
+	TraceTimeout int
 }
 
 type ProgressTracker struct {
