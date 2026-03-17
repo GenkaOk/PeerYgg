@@ -1,14 +1,25 @@
-package main
+package progress
 
 import (
 	"fmt"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/genkaok/PeerYgg/internal/config"
 )
 
-func NewProgressTracker(total int, progressType ProgressType) *ProgressTracker {
-	return &ProgressTracker{
+type Tracker struct {
+	Total        int
+	Completed    int
+	Successful   int
+	Failed       int
+	startTime    time.Time
+	progressType config.ProgressType
+}
+
+func NewTracker(total int, progressType config.ProgressType) *Tracker {
+	return &Tracker{
 		Total:        total,
 		Completed:    0,
 		Successful:   0,
@@ -18,7 +29,7 @@ func NewProgressTracker(total int, progressType ProgressType) *ProgressTracker {
 	}
 }
 
-func (pt *ProgressTracker) Increment(success bool) {
+func (pt *Tracker) Increment(success bool) {
 	pt.Completed++
 	if success {
 		pt.Successful++
@@ -28,11 +39,10 @@ func (pt *ProgressTracker) Increment(success bool) {
 	pt.Print()
 }
 
-func (pt *ProgressTracker) Print() {
+func (pt *Tracker) Print() {
 	elapsed := time.Since(pt.startTime)
 	percentage := float64(pt.Completed) / float64(pt.Total) * 100
 
-	// Расчет оставшегося времени
 	var eta string
 	if pt.Completed > 0 {
 		avgTime := elapsed / time.Duration(pt.Completed)
@@ -42,14 +52,12 @@ func (pt *ProgressTracker) Print() {
 		eta = "calculating..."
 	}
 
-	if pt.progressType == FullProgress {
+	if pt.progressType == config.FullProgress {
 		barLength := 30
 		filledLength := int(float64(barLength) * float64(pt.Completed) / float64(pt.Total))
 
-		// Построить прогресс-бар
 		bar := strings.Repeat("█", filledLength) + strings.Repeat("░", barLength-filledLength)
 
-		// Вывод прогресса
 		fmt.Fprintf(os.Stderr, "\r[%s] %.1f%% (%d/%d) | ✓ %d ✗ %d | Elapsed: %s | ETA: %s",
 			bar,
 			percentage,
@@ -60,7 +68,7 @@ func (pt *ProgressTracker) Print() {
 			formatDuration(elapsed),
 			eta,
 		)
-	} else if pt.progressType == SimpleProgress {
+	} else if pt.progressType == config.SimpleProgress {
 		fmt.Fprintf(os.Stderr, "\r[%d/%d] %.1f%% | ✓ %d ✗ %d | Elapsed: %s | ETA: %s",
 			pt.Completed,
 			pt.Total,
@@ -73,7 +81,7 @@ func (pt *ProgressTracker) Print() {
 	}
 }
 
-func (pt *ProgressTracker) Finish() {
+func (pt *Tracker) Finish() {
 	elapsed := time.Since(pt.startTime)
 	fmt.Fprintf(os.Stderr, "\n✓ Scanning complete in %s\n", formatDuration(elapsed))
 	fmt.Fprintf(os.Stderr, "Results: %d successful, %d failed out of %d peers\n\n",

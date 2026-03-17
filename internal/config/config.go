@@ -1,10 +1,57 @@
-package main
+package config
 
 import (
 	"flag"
 	"os"
 	"strings"
 )
+
+const (
+	DefaultURL          = "https://raw.githubusercontent.com/GenkaOk/public-peers/refs/heads/master/nodes.json"
+	LocalStore          = "peers.json"
+	HTTPTimeoutSecs     = 1
+	DefaultConcurrency  = 30
+	DefaultTimeoutSec   = 1
+	DefaultTraceCount   = 5
+	DefaultTraceMaxHops = 20
+	DefaultTraceTimeout = 30
+)
+
+type ProgressType int
+
+const (
+	WithoutProgress ProgressType = iota
+	SimpleProgress
+	FullProgress
+)
+
+type OutputFormat string
+
+const (
+	OutputCurrent OutputFormat = "current"
+	OutputJSON    OutputFormat = "json"
+	OutputTable   OutputFormat = "table"
+	OutputConfig  OutputFormat = "config"
+)
+
+type Config struct {
+	URL          string
+	Store        string
+	AddCmd       string
+	RemoveCmd    string
+	DryRun       bool
+	Concurrency  int
+	TimeoutSec   int
+	TopN         int
+	GroupByHost  bool
+	ProgressType ProgressType
+	OutputFormat OutputFormat
+	InsecureSSL  bool
+
+	TraceCount   int
+	TraceMaxHops int
+	TraceTimeout int
+}
 
 func getEnv(key, def string) string {
 	if v := os.Getenv(key); v != "" {
@@ -13,7 +60,7 @@ func getEnv(key, def string) string {
 	return def
 }
 
-func LoadConfig() *Config {
+func Load() *Config {
 	n := flag.Int("n", 5, "number of fastest peers/servers to output")
 	concurrency := flag.Int("c", DefaultConcurrency, "concurrency for pings")
 	timeout := flag.Int("t", DefaultTimeoutSec, "timeout per ping in seconds")
@@ -29,7 +76,7 @@ func LoadConfig() *Config {
 
 	flag.Parse()
 
-	progressType := parseProgressMode(*progressMode)
+	pType := parseProgressMode(*progressMode)
 	format := parseOutputFormat(*outputFormat)
 
 	return &Config{
@@ -42,7 +89,7 @@ func LoadConfig() *Config {
 		TimeoutSec:   *timeout,
 		TopN:         *n,
 		GroupByHost:  *groupByHost,
-		ProgressType: progressType,
+		ProgressType: pType,
 		OutputFormat: format,
 		InsecureSSL:  *insecureSsl,
 
@@ -58,23 +105,13 @@ func parseProgressMode(mode string) ProgressType {
 	switch mode {
 	case "none":
 		return WithoutProgress
-	case "f":
-	case "fu":
-	case "ful":
-	case "full":
+	case "f", "fu", "ful", "full":
 		return FullProgress
-	case "s":
-	case "si":
-	case "sim":
-	case "simp":
-	case "simpl":
-	case "simple":
+	case "s", "si", "sim", "simp", "simpl", "simple":
 		return SimpleProgress
 	default:
 		return SimpleProgress
 	}
-
-	return FullProgress
 }
 
 func parseOutputFormat(format string) OutputFormat {

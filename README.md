@@ -27,7 +27,7 @@ most efficient connections.
 - **Routing analysis** — calculate hop count (traceroute) to target nodes
 - **Flexible output formats** — export results as table, configuration file, or JSON for easy integration and analysis
 - **Group results** — group peers by IP address for better organization and analysis
-- **Compatibility** - Good compatibility with various types of architectures (x64, ARM, ARMv5-7, MIPS(LE))
+- **Compatibility** – Good compatibility with various types of architectures (x64, ARM, ARMv5-7, MIPS(LE))
 
 ![demo](assets/demo.gif)
 
@@ -79,8 +79,8 @@ cd peerygg-linux-amd64
 ```sh
 git clone https://github.com/GenkaOk/PeerYgg
 cd PeerYgg
-go build .
-# binary is at ./PeerYgg
+go build -o peerygg ./cmd/peerygg/main.go
+# binary is at ./peerygg
 ```
 
 ---

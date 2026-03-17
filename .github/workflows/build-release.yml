@@ -81,7 +81,7 @@ jobs:
           mkdir -p build
           OUTPUT_NAME="build/${BINARY}"
           [ "${{ matrix.build.os }}" = "windows" ] && OUTPUT_NAME="${OUTPUT_NAME}.exe"
-          go build -o "${OUTPUT_NAME}" .
+          go build -o "${OUTPUT_NAME}" ./cmd/peerygg
           ls -lh "${OUTPUT_NAME}"
 
       - name: Package

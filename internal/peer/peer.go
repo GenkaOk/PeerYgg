@@ -1,4 +1,4 @@
-package main
+package peer
 
 import (
 	"encoding/json"
@@ -7,14 +7,32 @@ import (
 	"strings"
 )
 
-func ParsePeerSourceJSON(b []byte) (*PeerSource, error) {
+type Source struct {
+	Servers []Server `json:"servers"`
+	RawJSON json.RawMessage
+}
+
+type Server struct {
+	Region  string   `json:"region"`
+	Country string   `json:"country"`
+	Peers   []string `json:"peers"`
+}
+
+type Info struct {
+	Peer     string `json:"peer"`
+	Region   string `json:"region"`
+	Country  string `json:"country"`
+	ServerID string `json:"server_id"`
+}
+
+func ParseSourceJSON(b []byte) (*Source, error) {
 	var raw map[string]map[string][]string
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return nil, fmt.Errorf("unsupported peers JSON format: %w", err)
 	}
 
-	src := &PeerSource{
-		Servers: make([]PeerServer, 0),
+	src := &Source{
+		Servers: make([]Server, 0),
 		RawJSON: append(json.RawMessage(nil), b...),
 	}
 
@@ -39,7 +57,7 @@ func ParsePeerSourceJSON(b []byte) (*PeerSource, error) {
 				continue
 			}
 
-			src.Servers = append(src.Servers, PeerServer{
+			src.Servers = append(src.Servers, Server{
 				Region:  strings.TrimSpace(region),
 				Country: strings.TrimSpace(country),
 				Peers:   peers,
@@ -54,30 +72,30 @@ func ParsePeerSourceJSON(b []byte) (*PeerSource, error) {
 	return src, nil
 }
 
-func FlattenPeerSource(src *PeerSource) []PeerInfo {
+func FlattenSource(src *Source) []Info {
 	if src == nil {
 		return nil
 	}
 
-	out := make([]PeerInfo, 0)
+	out := make([]Info, 0)
 	seen := make(map[string]struct{})
 
 	for idx, server := range src.Servers {
 		serverID := fmt.Sprintf("%s|%s|%d", server.Region, server.Country, idx)
-		for _, peer := range server.Peers {
-			peer = strings.TrimSpace(peer)
-			if peer == "" {
+		for _, p := range server.Peers {
+			p = strings.TrimSpace(p)
+			if p == "" {
 				continue
 			}
 
-			key := serverID + "|" + peer
+			key := serverID + "|" + p
 			if _, ok := seen[key]; ok {
 				continue
 			}
 			seen[key] = struct{}{}
 
-			out = append(out, PeerInfo{
-				Peer:     peer,
+			out = append(out, Info{
+				Peer:     p,
 				Region:   server.Region,
 				Country:  server.Country,
 				ServerID: serverID,
@@ -98,7 +116,7 @@ func FlattenPeerSource(src *PeerSource) []PeerInfo {
 	return out
 }
 
-func ExtractPeerStrings(peers []PeerInfo) []string {
+func ExtractPeerStrings(peers []Info) []string {
 	out := make([]string, 0, len(peers))
 	for _, p := range peers {
 		out = append(out, p.Peer)
@@ -123,7 +141,7 @@ func UniqueSorted(in []string) []string {
 	return out
 }
 
-func DiffPeers(oldList, newList []string) (toAdd, toRemove []string) {
+func Diff(oldList, newList []string) (toAdd, toRemove []string) {
 	oldSet := make(map[string]struct{}, len(oldList))
 	for _, s := range oldList {
 		oldSet[s] = struct{}{}
