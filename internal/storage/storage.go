@@ -2,6 +2,8 @@ package storage
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -36,6 +38,8 @@ func FetchURL(url string, cfg *config.Config) ([]byte, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if cfg != nil && cfg.InsecureSSL {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // explicit -insecure flag
+	} else if roots := rootCAs(); roots != nil {
+		transport.TLSClientConfig = &tls.Config{RootCAs: roots}
 	}
 
 	client := &http.Client{
@@ -45,7 +49,7 @@ func FetchURL(url string, cfg *config.Config) ([]byte, error) {
 
 	resp, err := client.Get(url)
 	if err != nil {
-		return nil, err
+		return nil, withCAHint(err)
 	}
 	defer resp.Body.Close()
 
@@ -54,6 +58,14 @@ func FetchURL(url string, cfg *config.Config) ([]byte, error) {
 	}
 
 	return io.ReadAll(resp.Body)
+}
+
+func withCAHint(err error) error {
+	var unknown x509.UnknownAuthorityError
+	if errors.As(err, &unknown) {
+		return fmt.Errorf("%w (no trusted CA bundle found; install ca-certificates, e.g. \"opkg install ca-certificates\", or set SSL_CERT_FILE)", err)
+	}
+	return err
 }
 
 func ReadStdin() (string, error) {
