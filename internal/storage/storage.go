@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,8 +33,14 @@ func SaveLocal(path string, raw []byte) error {
 }
 
 func FetchURL(url string, cfg *config.Config) ([]byte, error) {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if cfg != nil && cfg.InsecureSSL {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // explicit -insecure flag
+	}
+
 	client := &http.Client{
-		Timeout: time.Duration(config.HTTPTimeoutSecs) * time.Second,
+		Timeout:   time.Duration(config.HTTPTimeoutSecs) * time.Second,
+		Transport: transport,
 	}
 
 	resp, err := client.Get(url)
