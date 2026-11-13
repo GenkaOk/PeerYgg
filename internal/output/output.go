@@ -36,7 +36,7 @@ func PrintGroupedResults(all, selected []network.Result, format config.OutputFor
 	case config.OutputConfig:
 		writeConfigPeers(groupedSelected)
 	default:
-		writeGroupsCurrent(network.BuildServerGroups(groupedSelected))
+		writeGroupsCurrent(network.BuildServerGroups(groupedSelected), extractPeers(groupedSelected))
 	}
 }
 
@@ -58,10 +58,27 @@ func resultMark(preferred, nearby bool) string {
 }
 
 func writeResultsTable(results []network.Result) {
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "PEER\tLATENCY\tPREF\tREGION\tCOUNTRY")
+	showMarks := false
 	for _, r := range results {
-		fmt.Fprintf(w, "%s\t%v\t%s\t%s\t%s\n", r.Peer, r.Latency, resultMark(r.Preferred, r.Nearby), r.Region, r.Country)
+		if r.Preferred || r.Nearby {
+			showMarks = true
+			break
+		}
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	if showMarks {
+		fmt.Fprintln(w, "PEER\tLATENCY\tPREF\tREGION\tCOUNTRY")
+	} else {
+		fmt.Fprintln(w, "PEER\tLATENCY\tREGION\tCOUNTRY")
+	}
+
+	for _, r := range results {
+		if showMarks {
+			fmt.Fprintf(w, "%s\t%v\t%s\t%s\t%s\n", r.Peer, r.Latency, resultMark(r.Preferred, r.Nearby), r.Region, r.Country)
+			continue
+		}
+		fmt.Fprintf(w, "%s\t%v\t%s\t%s\n", r.Peer, r.Latency, r.Region, r.Country)
 	}
 	w.Flush()
 }
@@ -74,19 +91,85 @@ func writeConfigPeers(results []network.Result) {
 	fmt.Println(strings.Join(peers, ","))
 }
 
-func writeResultsCurrent(results []network.Result) {
-	for i, r := range results {
-		fmt.Printf("%d. %s (%v) [%s, %s]%s\n", i+1, r.Peer, r.Latency, r.Region, r.Country, markSuffix(resultMark(r.Preferred, r.Nearby)))
+func extractPeers(results []network.Result) []string {
+	out := make([]string, 0, len(results))
+	for _, r := range results {
+		out = append(out, r.Peer)
 	}
+	return out
 }
 
-func writeGroupsCurrent(groups []network.ServerGroup) {
+func writeResultsCurrent(results []network.Result) {
+	fmt.Fprintln(os.Stderr, "=== Top Peers ===")
+	for i, r := range results {
+		hopsInfo := ""
+		if r.Hops > 0 {
+			hopsInfo = fmt.Sprintf(" (%d hops)", r.Hops)
+		}
+		fmt.Fprintf(
+			os.Stderr,
+			"%2d. %s (%s) — %d ms%s [%s, %s]%s\n",
+			i+1,
+			r.Peer,
+			r.Scheme,
+			r.Latency.Milliseconds(),
+			hopsInfo,
+			r.Region,
+			r.Country,
+			markSuffix(resultMark(r.Preferred, r.Nearby)),
+		)
+	}
+	fmt.Fprintln(os.Stderr)
+
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	_ = encoder.Encode(extractPeers(results))
+}
+
+func writeGroupsCurrent(groups []network.ServerGroup, outPeers []string) {
+	fmt.Fprintln(os.Stderr, "=== Top Servers (Grouped by Host) ===")
 	for i, g := range groups {
-		fmt.Printf("%d. %s (best: %v) [%s, %s]%s\n", i+1, g.Host, g.BestLatency, g.Region, g.Country, markSuffix(resultMark(g.Preferred, g.Nearby)))
-		for _, conn := range g.Connections {
-			fmt.Printf("   - %s (%v)%s\n", conn.Peer, conn.Latency, markSuffix(resultMark(conn.Preferred, conn.Nearby)))
+		fmt.Fprintf(
+			os.Stderr,
+			"%2d. %s — %d ms (%d connections) [%s, %s]%s\n",
+			i+1,
+			g.Host,
+			g.BestLatency.Milliseconds(),
+			len(g.Connections),
+			g.Region,
+			g.Country,
+			markSuffix(resultMark(g.Preferred, g.Nearby)),
+		)
+		for j, conn := range g.Connections {
+			hopsInfo := ""
+			if conn.Hops > 0 {
+				hopsInfo = fmt.Sprintf(" (%d hops)", conn.Hops)
+			}
+			fmt.Fprintf(
+				os.Stderr,
+				"    [%d] %s (%s) — %d ms%s [%s, %s]%s\n",
+				j+1,
+				conn.Peer,
+				conn.Scheme,
+				conn.Latency.Milliseconds(),
+				hopsInfo,
+				conn.Region,
+				conn.Country,
+				markSuffix(resultMark(conn.Preferred, conn.Nearby)),
+			)
 		}
 	}
+	fmt.Fprintln(os.Stderr)
+
+	fmt.Fprintln(os.Stderr, "=== Best Peer per Server (Output) ===")
+	for i, p := range outPeers {
+		fmt.Fprintf(os.Stderr, "%2d. %s\n", i+1, p)
+	}
+	fmt.Fprintln(os.Stderr)
+
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	_ = encoder.Encode(outPeers)
 }
 
 func markSuffix(mark string) string {

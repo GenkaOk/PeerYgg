@@ -72,25 +72,37 @@ func main() {
 	}
 
 	traceCount := cfg.TraceCount
+	if traceCount < 0 {
+		traceCount = 0
+	}
 	if len(results) < traceCount {
 		traceCount = len(results)
 	}
-	traceExtra := make(map[string]struct{}, len(stats.AddedPeers))
-	for _, p := range stats.AddedPeers {
-		traceExtra[p] = struct{}{}
-	}
-	traceIndexes := make([]int, 0, traceCount+len(traceExtra))
-	for i := range results {
-		if i < traceCount {
-			traceIndexes = append(traceIndexes, i)
-			continue
+
+	var traceIndexes []int
+	if traceCount > 0 {
+		traceExtra := make(map[string]struct{}, len(stats.AddedPeers))
+		for _, p := range stats.AddedPeers {
+			traceExtra[p] = struct{}{}
 		}
-		if _, ok := traceExtra[results[i].Peer]; ok {
-			traceIndexes = append(traceIndexes, i)
+		traceIndexes = make([]int, 0, traceCount+len(traceExtra))
+		for i := range results {
+			if i < traceCount {
+				traceIndexes = append(traceIndexes, i)
+				continue
+			}
+			if _, ok := traceExtra[results[i].Peer]; ok {
+				traceIndexes = append(traceIndexes, i)
+			}
 		}
 	}
+
 	if len(traceIndexes) > 0 {
-		fmt.Fprintf(os.Stderr, "Tracing %d peers to calculate hops...\n", len(traceIndexes))
+		if len(traceIndexes) == traceCount {
+			fmt.Fprintf(os.Stderr, "Tracing top %d peers to calculate hops...\n", traceCount)
+		} else {
+			fmt.Fprintf(os.Stderr, "Tracing %d peers to calculate hops (including preferred)...\n", len(traceIndexes))
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TraceTimeout)*time.Second)
 		defer cancel()
 
@@ -108,6 +120,16 @@ func main() {
 		}
 		wg.Wait()
 		fmt.Fprintln(os.Stderr)
+
+		byPeer := make(map[string]int, len(results))
+		for i := range results {
+			byPeer[results[i].Peer] = i
+		}
+		for i := range selected {
+			if idx, ok := byPeer[selected[i].Peer]; ok {
+				selected[i].Hops = results[idx].Hops
+			}
+		}
 	}
 
 	if cfg.GroupByHost {
