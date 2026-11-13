@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -48,6 +49,9 @@ type Config struct {
 	OutputFormat OutputFormat
 	InsecureSSL  bool
 
+	Country      string
+	CountryCount int
+
 	TraceCount   int
 	TraceMaxHops int
 	TraceTimeout int
@@ -60,6 +64,15 @@ func getEnv(key, def string) string {
 	return def
 }
 
+func getEnvInt(key string, def int) int {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
+}
+
 func Load() *Config {
 	n := flag.Int("n", 5, "number of fastest peers/servers to output")
 	concurrency := flag.Int("c", DefaultConcurrency, "concurrency for pings")
@@ -67,6 +80,9 @@ func Load() *Config {
 	groupByHost := flag.Bool("group", false, "group peers by host and select best connection per server")
 	progressMode := flag.String("progress", "full", "progress mode: [n]one|[s]imple|[f]ull")
 	outputFormat := flag.String("output", "current", "output format: current|json|table|config")
+
+	country := flag.String("country", "", "preferred destination country (slug or ISO code, e.g. nl)")
+	countryCount := flag.Int("country-count", 2, "number of peers to guarantee for the preferred country")
 
 	traceCount := flag.Int("trace-count", DefaultTraceCount, "tracing count peers to calculate hops, 0 for disable trace calculate")
 	traceHops := flag.Int("trace-max-hops", DefaultTraceMaxHops, "max hops count for calculate")
@@ -78,6 +94,11 @@ func Load() *Config {
 
 	pType := parseProgressMode(*progressMode)
 	format := parseOutputFormat(*outputFormat)
+
+	count := getEnvInt("PEERS_COUNTRY_COUNT", *countryCount)
+	if count < 0 {
+		count = 0
+	}
 
 	return &Config{
 		URL:          getEnv("PEERS_URL", DefaultURL),
@@ -92,6 +113,9 @@ func Load() *Config {
 		ProgressType: pType,
 		OutputFormat: format,
 		InsecureSSL:  *insecureSsl,
+
+		Country:      getEnv("PEERS_COUNTRY", *country),
+		CountryCount: count,
 
 		TraceCount:   *traceCount,
 		TraceMaxHops: *traceHops,

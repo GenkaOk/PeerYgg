@@ -26,6 +26,17 @@ func main() {
 
 	fmt.Fprintf(os.Stderr, "Loaded %d peers\n", len(allPeers))
 
+	preferredCountry, preferredRegion := "", ""
+	if cfg.Country != "" {
+		var err error
+		preferredCountry, preferredRegion, err = peer.ResolveCountry(source, cfg.Country)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "failed resolve country:", err)
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "Preferred country: %s (%s), extra peers: %d\n", preferredCountry, preferredRegion, cfg.CountryCount)
+	}
+
 	fmt.Fprintf(os.Stderr, "Starting scan with concurrency %d, timeout %ds\n", cfg.Concurrency, cfg.TimeoutSec)
 	results := network.MeasureAll(
 		allPeers,
@@ -44,35 +55,65 @@ func main() {
 
 	fmt.Fprintf(os.Stderr, "Found %d reachable peers\n\n", len(results))
 
+	selected, stats := network.SelectPreferred(
+		results,
+		cfg.TopN,
+		cfg.CountryCount,
+		preferredCountry,
+		preferredRegion,
+		cfg.GroupByHost,
+	)
+	if cfg.Country != "" {
+		fmt.Fprintf(os.Stderr, "Preferred %s: %d of %d live peers selected", stats.Country, stats.TargetSelected, stats.TargetLive)
+		if stats.NearbyAdded > 0 {
+			fmt.Fprintf(os.Stderr, " (+%d nearby from %s)", stats.NearbyAdded, stats.Region)
+		}
+		fmt.Fprintln(os.Stderr)
+	}
+
 	traceCount := cfg.TraceCount
 	if len(results) < traceCount {
 		traceCount = len(results)
 	}
-	if traceCount > 0 {
-		fmt.Fprintf(os.Stderr, "Tracing top %d peers to calculate hops...\n", traceCount)
+	traceExtra := make(map[string]struct{}, len(stats.AddedPeers))
+	for _, p := range stats.AddedPeers {
+		traceExtra[p] = struct{}{}
+	}
+	traceIndexes := make([]int, 0, traceCount+len(traceExtra))
+	for i := range results {
+		if i < traceCount {
+			traceIndexes = append(traceIndexes, i)
+			continue
+		}
+		if _, ok := traceExtra[results[i].Peer]; ok {
+			traceIndexes = append(traceIndexes, i)
+		}
+	}
+	if len(traceIndexes) > 0 {
+		fmt.Fprintf(os.Stderr, "Tracing %d peers to calculate hops...\n", len(traceIndexes))
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TraceTimeout)*time.Second)
 		defer cancel()
 
 		var wg sync.WaitGroup
 		var completed atomic.Int32
 
-		for i := 0; i < traceCount; i++ {
+		for _, idx := range traceIndexes {
 			wg.Add(1)
 			go func(idx int) {
 				defer wg.Done()
 				results[idx].Hops = network.TraceHops(ctx, results[idx].Host, cfg.TraceMaxHops)
 				count := completed.Add(1)
-				fmt.Fprintf(os.Stderr, "  [%d/%d] %s: %d hops\n", count, traceCount, results[idx].Host, results[idx].Hops)
-			}(i)
+				fmt.Fprintf(os.Stderr, "  [%d/%d] %s: %d hops\n", count, len(traceIndexes), results[idx].Host, results[idx].Hops)
+			}(idx)
 		}
 		wg.Wait()
 		fmt.Fprintln(os.Stderr)
 	}
 
 	if cfg.GroupByHost {
-		output.PrintGroupedResults(results, cfg.TopN, cfg.OutputFormat)
+		output.PrintGroupedResults(results, selected, cfg.OutputFormat)
 	} else {
-		output.PrintResults(results, cfg.TopN, cfg.OutputFormat)
+		output.PrintResults(results, selected, cfg.OutputFormat)
 	}
 
 	if source != nil && len(source.RawJSON) > 0 {

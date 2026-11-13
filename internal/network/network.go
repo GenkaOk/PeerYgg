@@ -19,13 +19,15 @@ import (
 )
 
 type Result struct {
-	Peer    string        `json:"peer"`
-	Latency time.Duration `json:"latency_ms"`
-	Hops    int           `json:"hops,omitzero"`
-	Host    string        `json:"host"`
-	Scheme  string        `json:"scheme"`
-	Region  string        `json:"region"`
-	Country string        `json:"country"`
+	Peer      string        `json:"peer"`
+	Latency   time.Duration `json:"latency_ms"`
+	Hops      int           `json:"hops,omitzero"`
+	Host      string        `json:"host"`
+	Scheme    string        `json:"scheme"`
+	Region    string        `json:"region"`
+	Country   string        `json:"country"`
+	Preferred bool          `json:"preferred,omitempty"`
+	Nearby    bool          `json:"nearby,omitempty"`
 }
 
 type ServerGroup struct {
@@ -33,16 +35,20 @@ type ServerGroup struct {
 	BestLatency time.Duration `json:"best_latency_ms"`
 	Region      string        `json:"region"`
 	Country     string        `json:"country"`
+	Preferred   bool          `json:"preferred,omitempty"`
+	Nearby      bool          `json:"nearby,omitempty"`
 	Connections []Connection  `json:"connections"`
 }
 
 type Connection struct {
-	Peer    string        `json:"peer"`
-	Scheme  string        `json:"scheme"`
-	Latency time.Duration `json:"latency_ms"`
-	Hops    int           `json:"hops,omitzero"`
-	Region  string        `json:"region"`
-	Country string        `json:"country"`
+	Peer      string        `json:"peer"`
+	Scheme    string        `json:"scheme"`
+	Latency   time.Duration `json:"latency_ms"`
+	Hops      int           `json:"hops,omitzero"`
+	Region    string        `json:"region"`
+	Country   string        `json:"country"`
+	Preferred bool          `json:"preferred,omitempty"`
+	Nearby    bool          `json:"nearby,omitempty"`
 }
 
 func ParseAddress(addr string) (host, port, scheme string, err error) {
@@ -156,17 +162,21 @@ func BuildServerGroups(results []Result) []ServerGroup {
 				BestLatency: r.Latency,
 				Region:      r.Region,
 				Country:     r.Country,
+				Preferred:   r.Preferred,
+				Nearby:      r.Nearby,
 				Connections: []Connection{},
 			}
 			order = append(order, r.Host)
 		}
 		groupsMap[r.Host].Connections = append(groupsMap[r.Host].Connections, Connection{
-			Peer:    r.Peer,
-			Scheme:  r.Scheme,
-			Latency: r.Latency,
-			Hops:    r.Hops,
-			Region:  r.Region,
-			Country: r.Country,
+			Peer:      r.Peer,
+			Scheme:    r.Scheme,
+			Latency:   r.Latency,
+			Hops:      r.Hops,
+			Region:    r.Region,
+			Country:   r.Country,
+			Preferred: r.Preferred,
+			Nearby:    r.Nearby,
 		})
 	}
 

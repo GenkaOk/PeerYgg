@@ -29,6 +29,7 @@ PeerYgg — это инструмент для поиска и анализа п
 - **Гибкие форматы вывода** — экспорт результатов в виде таблицы, конфигурационного файла или JSON для удобной
   интеграции и анализа
 - **Группировка результатов** — объединение пиров по IP-адресу для более удобного просмотра и анализа
+- **Приоритетная страна** — гарантирует пиры из выбранной страны назначения (например, `-country nl`) вместе с самыми быстрыми
 - **Совместимость** — Хорошая совместимость с различными типами архитектур (x64, ARM, ARMv5-7, MIPS(LE))
 
 ![demo](assets/demo.gif)
@@ -115,6 +116,10 @@ go build -o peerygg ./cmd/peerygg/main.go
 Usage of PeerYgg:
   -c int
         concurrency for pings (default 30)
+  -country string
+        preferred destination country (slug or ISO code, e.g. nl)
+  -country-count int
+        number of peers to guarantee for the preferred country (default 2)
   -group
         group peers by host and select best connection per server
   -insecure
@@ -134,6 +139,16 @@ Usage of PeerYgg:
   -trace-timeout int
         timeout in seconds for tracing all peers (default 30)
 ```
+
+#### Приоритетная страна
+
+Если вы знаете, куда идёт основной трафик, попросите PeerYgg сохранить пиры в этой стране:
+
+```bash
+peerygg -n 5 -country nl -country-count 2
+```
+
+Команда оставляет 5 самых быстрых пиров и добавляет к ним до 2 доступных пиров из Нидерландов, которых ещё нет в списке. Если доступных пиров в целевой стране меньше 2, недостаток добирается самыми быстрыми пирами из того же региона (для Нидерландов — `europe`). `-country` принимает slug, ISO alpha-2 код или распространённое название (`nl`, `netherlands`, `holland`). Итоговый список ограничен `n + country-count`; в стандартном выводе выбранные пиры помечаются `*` (целевая страна) или `~` (соседний регион), в таблице — колонка `PREF`. Переменные окружения: `PEERS_COUNTRY`, `PEERS_COUNTRY_COUNT`.
 
 #### Форматы вывода
 

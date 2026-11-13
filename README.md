@@ -27,6 +27,7 @@ most efficient connections.
 - **Routing analysis** — calculate hop count (traceroute) to target nodes
 - **Flexible output formats** — export results as table, configuration file, or JSON for easy integration and analysis
 - **Group results** — group peers by IP address for better organization and analysis
+- **Preferred country** — guarantee peers from a chosen destination country (e.g. `-country nl`) alongside the fastest peers
 - **Compatibility** – Good compatibility with various types of architectures (x64, ARM, ARMv5-7, MIPS(LE))
 
 ![demo](assets/demo.gif)
@@ -111,6 +112,10 @@ Utility supported next OS:
 Usage of PeerYgg:
   -c int
     	concurrency for pings (default 30)
+  -country string
+        preferred destination country (slug or ISO code, e.g. nl)
+  -country-count int
+        number of peers to guarantee for the preferred country (default 2)
   -group
     	group peers by host and select best connection per server
   -insecure
@@ -130,6 +135,16 @@ Usage of PeerYgg:
   -trace-timeout int
     	timeout in seconds for tracing all peers (default 30)
 ```
+
+#### Preferred country
+
+If you know where your main traffic goes, ask PeerYgg to keep peers there:
+
+```bash
+peerygg -n 5 -country nl -country-count 2
+```
+
+The command keeps the 5 fastest peers and appends up to 2 reachable peers from the Netherlands that are not already in that list. If fewer than 2 peers in the target country are reachable, the shortfall is filled with the fastest peers from the same region (for the Netherlands, `europe`). `-country` accepts a slug, an ISO alpha-2 code, or a common name (`nl`, `netherlands`, `holland`). The output is capped at `n + country-count`; in the default output selected peers are marked `*` (target country) or `~` (nearby region), and in the table the marks appear in the `PREF` column. Environment variables: `PEERS_COUNTRY`, `PEERS_COUNTRY_COUNT`.
 
 #### Output Formats
 
