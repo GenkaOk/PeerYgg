@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	DefaultURL          = "https://raw.githubusercontent.com/GenkaOk/public-peers/refs/heads/master/nodes.json"
+	DefaultURL          = "https://raw.githubusercontent.com/GenkaOk/public-peers/refs/heads/data/nodes/nodes.json"
 	LocalStore          = "peers.json"
 	HTTPTimeoutSecs     = 1
 	DefaultConcurrency  = 30
