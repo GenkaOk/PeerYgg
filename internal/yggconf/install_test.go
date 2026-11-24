@@ -1,9 +1,12 @@
 package yggconf
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -415,8 +418,15 @@ func TestInstall(t *testing.T) {
 		if err == nil {
 			t.Fatal("Install accepted a config the daemon rejected")
 		}
-		if rep != nil {
-			t.Errorf("report = %+v, want nil on error", rep)
+		// The backup was already written before validation, so the partial
+		// report must name it even though the install failed.
+		if rep == nil {
+			t.Fatal("report = nil, want the partial report naming the backup")
+		}
+		if rep.BackupPath == "" {
+			t.Error("BackupPath is empty, want the backup made before validation")
+		} else if _, statErr := os.Stat(rep.BackupPath); statErr != nil {
+			t.Errorf("reported backup %q is missing: %v", rep.BackupPath, statErr)
 		}
 		if !strings.Contains(err.Error(), `unknown field "Peerss"`) {
 			t.Errorf("error %q does not quote the daemon's stderr", err)
@@ -459,6 +469,92 @@ func TestInstall(t *testing.T) {
 		}
 		if !strings.Contains(string(after), `"tcp://new:443"`) {
 			t.Error("config was not updated without the daemon")
+		}
+	})
+
+	t.Run("symlink_writes_resolved_target", func(t *testing.T) {
+		isolatePath(t)
+		dir := t.TempDir()
+		realDir := filepath.Join(dir, "dotfiles")
+		if err := os.MkdirAll(realDir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		real := filepath.Join(realDir, "yggdrasil.conf")
+		writeConfig(t, real, sampleConf, 0o640)
+		link := filepath.Join(dir, "yggdrasil.conf")
+		if err := os.Symlink(real, link); err != nil {
+			t.Skipf("symlinks unsupported here: %v", err)
+		}
+
+		stubLookPath(t, "/usr/local/bin/yggdrasil", nil)
+		stubRunCommand(t, func(string, ...string) ([]byte, []byte, error) {
+			return []byte(`{"Peers":["tcp://new:443"]}`), nil, nil
+		})
+
+		rep, err := Install(Options{Path: link, Peers: []string{"tcp://new:443"}})
+		if err != nil {
+			t.Fatalf("Install: %v", err)
+		}
+		// EvalSymlinks also resolves symlinks in the parent path (on macOS
+		// /var is a link to /private/var), so compare with its own result.
+		wantPath, err := filepath.EvalSymlinks(real)
+		if err != nil {
+			t.Fatalf("eval target: %v", err)
+		}
+		if rep.Path != wantPath {
+			t.Errorf("Path = %q, want the resolved target %q", rep.Path, wantPath)
+		}
+
+		info, err := os.Lstat(link)
+		if err != nil {
+			t.Fatalf("lstat link: %v", err)
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			t.Fatal("install replaced the symlink with a regular file")
+		}
+		after, err := os.ReadFile(real)
+		if err != nil {
+			t.Fatalf("read target: %v", err)
+		}
+		if !strings.Contains(string(after), `"tcp://new:443"`) {
+			t.Errorf("target config was not updated:\n%s", after)
+		}
+		if strings.Contains(string(after), "tcp://old:443") {
+			t.Error("target config still has the old peer")
+		}
+
+		if got := filepath.Dir(rep.BackupPath); got != filepath.Dir(wantPath) {
+			t.Errorf("backup dir = %q, want %q (next to the target)", got, filepath.Dir(wantPath))
+		}
+		backups, err := filepath.Glob(real + ".bak-*")
+		if err != nil {
+			t.Fatalf("glob backups: %v", err)
+		}
+		if len(backups) != 1 {
+			t.Errorf("backups next to target = %v, want exactly one", backups)
+		}
+		if links, _ := filepath.Glob(link + ".bak-*"); len(links) != 0 {
+			t.Errorf("backup was made next to the symlink: %v", links)
+		}
+	})
+
+	t.Run("broken_symlink_errors", func(t *testing.T) {
+		isolatePath(t)
+		dir := t.TempDir()
+		link := filepath.Join(dir, "yggdrasil.conf")
+		if err := os.Symlink(filepath.Join(dir, "missing.conf"), link); err != nil {
+			t.Skipf("symlinks unsupported here: %v", err)
+		}
+
+		rep, err := Install(Options{Path: link, Peers: []string{"tcp://new:443"}})
+		if err == nil {
+			t.Fatal("Install succeeded through a dangling symlink")
+		}
+		if rep != nil {
+			t.Errorf("report = %+v, want nil before any write", rep)
+		}
+		if !strings.Contains(err.Error(), link) {
+			t.Errorf("error %q does not name the symlink %q", err, link)
 		}
 	})
 
@@ -590,6 +686,86 @@ func TestValidate(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "fatal: bad config") {
 			t.Errorf("error %q does not quote stderr", err)
+		}
+	})
+
+	t.Run("run_failure_is_not_a_rejection", func(t *testing.T) {
+		isolatePath(t)
+		conf := filepath.Join(t.TempDir(), "yggdrasil.conf")
+		writeConfig(t, conf, sampleConf, 0o600)
+		stubLookPath(t, "/usr/local/bin/yggdrasil", nil)
+		stubRunCommand(t, func(string, ...string) ([]byte, []byte, error) {
+			return nil, nil, &exec.Error{Name: "yggdrasil", Err: exec.ErrNotFound}
+		})
+
+		checked, err := Validate(conf)
+		if err == nil {
+			t.Fatal("Validate ignored a daemon that could not start")
+		}
+		if checked {
+			t.Error("checked = true, want false when the daemon never ran")
+		}
+		if !strings.Contains(err.Error(), "failed to run") {
+			t.Errorf("error %q does not say the daemon failed to run", err)
+		}
+		if strings.Contains(err.Error(), "rejected config") {
+			t.Errorf("error %q blames a config the daemon never read", err)
+		}
+	})
+
+	t.Run("timeout_is_not_a_rejection", func(t *testing.T) {
+		isolatePath(t)
+		conf := filepath.Join(t.TempDir(), "yggdrasil.conf")
+		writeConfig(t, conf, sampleConf, 0o600)
+		stubLookPath(t, "/usr/local/bin/yggdrasil", nil)
+		stubRunCommand(t, func(string, ...string) ([]byte, []byte, error) {
+			return nil, nil, fmt.Errorf("killed after %s: %w", validateTimeout, context.DeadlineExceeded)
+		})
+
+		checked, err := Validate(conf)
+		if err == nil {
+			t.Fatal("Validate ignored a daemon timeout")
+		}
+		if checked {
+			t.Error("checked = true, want false after a timeout")
+		}
+		if !strings.Contains(err.Error(), "did not finish") {
+			t.Errorf("error %q does not report the timeout", err)
+		}
+		if strings.Contains(err.Error(), "rejected config") {
+			t.Errorf("error %q blames the config for a timeout", err)
+		}
+	})
+
+	t.Run("stderr_is_truncated", func(t *testing.T) {
+		isolatePath(t)
+		conf := filepath.Join(t.TempDir(), "yggdrasil.conf")
+		writeConfig(t, conf, sampleConf, 0o600)
+		stubLookPath(t, "/usr/local/bin/yggdrasil", nil)
+
+		var dump strings.Builder
+		for i := 0; i < 30; i++ {
+			fmt.Fprintf(&dump, "goroutine %d: panic line\n", i)
+		}
+		stubRunCommand(t, func(string, ...string) ([]byte, []byte, error) {
+			return nil, []byte(dump.String()), errors.New("exit status 2")
+		})
+
+		checked, err := Validate(conf)
+		if err == nil {
+			t.Fatal("Validate ignored a non-zero exit")
+		}
+		if !checked {
+			t.Error("checked = false, want true after the daemon ran")
+		}
+		if !strings.Contains(err.Error(), "goroutine 0: panic line") {
+			t.Errorf("error %q lost the first stderr lines", err)
+		}
+		if strings.Contains(err.Error(), "goroutine 20") {
+			t.Errorf("error %q was not truncated:\n%s", err, err)
+		}
+		if !strings.Contains(err.Error(), "truncated") {
+			t.Errorf("error %q does not mark truncated output", err)
 		}
 	})
 

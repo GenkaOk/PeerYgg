@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"runtime"
 	"sync"
@@ -187,6 +188,9 @@ func installPeers(cfg *config.Config, selected []network.Result) error {
 		DryRun: cfg.DryRun,
 	})
 	if err != nil {
+		// A failed install can still have made the backup; tell the user where
+		// it is before reporting the error.
+		printInstallFailure(os.Stderr, rep)
 		return err
 	}
 
@@ -196,24 +200,42 @@ func installPeers(cfg *config.Config, selected []network.Result) error {
 
 // printInstallReport prints what installPeers did, or would do on a dry run.
 func printInstallReport(rep *yggconf.Report) {
-	fmt.Fprintf(os.Stderr, "yggdrasil config: %s\n", rep.Path)
+	writeInstallReport(os.Stderr, rep)
+}
+
+// writeInstallReport renders a successful install report. A dry run and an
+// unchanged no-op never wrote anything, so neither prints a restart command.
+func writeInstallReport(w io.Writer, rep *yggconf.Report) {
+	fmt.Fprintf(w, "yggdrasil config: %s\n", rep.Path)
 	if rep.BackupPath != "" {
-		fmt.Fprintf(os.Stderr, "backup: %s\n", rep.BackupPath)
+		fmt.Fprintf(w, "backup: %s\n", rep.BackupPath)
 	}
 	if rep.Unchanged {
-		fmt.Fprintln(os.Stderr, "already up to date")
-	} else {
-		fmt.Fprintf(os.Stderr, "+%d / -%d peers\n", len(rep.Added), len(rep.Removed))
+		fmt.Fprintln(w, "already up to date")
+		return
 	}
-	// Install only skips validation when yggdrasil is not in PATH; a dry run
-	// and an unchanged config never reach the validation step at all.
-	if !rep.Validated && !rep.Unchanged && !rep.DryRun {
-		fmt.Fprintln(os.Stderr, "not validated (yggdrasil not found)")
+	fmt.Fprintf(w, "+%d / -%d peers\n", len(rep.Added), len(rep.Removed))
+	if rep.DryRun {
+		fmt.Fprintln(w, "dry run: nothing written")
+		return
+	}
+	// Install only skips validation when yggdrasil is not in PATH; an
+	// unchanged config never reaches the validation step at all.
+	if !rep.Validated {
+		fmt.Fprintln(w, "not validated (yggdrasil not found)")
 	}
 	if cmd, known := yggconf.RestartCommand(runtime.GOOS); known {
-		fmt.Fprintf(os.Stderr, "restart: %s\n", cmd)
+		fmt.Fprintf(w, "restart: %s\n", cmd)
 	} else {
-		fmt.Fprintln(os.Stderr, cmd)
+		fmt.Fprintln(w, cmd)
+	}
+}
+
+// printInstallFailure names the pre-install backup left on disk when an install
+// fails after making it. It is silent when there is no backup to report.
+func printInstallFailure(w io.Writer, rep *yggconf.Report) {
+	if rep != nil && rep.BackupPath != "" {
+		fmt.Fprintf(w, "backup: %s\n", rep.BackupPath)
 	}
 }
 

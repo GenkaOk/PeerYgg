@@ -19,7 +19,9 @@ var nowFunc = time.Now
 //
 // The backup is byte-identical to the source and keeps its permission bits.
 // Its owner is copied on a best-effort basis, so an unprivileged process can
-// still back up a root-owned config. On error nothing is left behind.
+// still back up a root-owned config. On error the incomplete backup is removed;
+// if that removal itself fails, the returned error says so and the path is left
+// on disk for the user to inspect.
 func CreateBackup(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -51,11 +53,15 @@ func CreateBackup(path string) (string, error) {
 
 		if err := writeBackup(f, data, mode, info); err != nil {
 			f.Close()
-			os.Remove(name)
+			if rmErr := os.Remove(name); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+				return "", fmt.Errorf("yggconf: writing backup %s: %w (incomplete backup left in place: %v)", name, err, rmErr)
+			}
 			return "", fmt.Errorf("yggconf: writing backup %s: %w", name, err)
 		}
 		if err := f.Close(); err != nil {
-			os.Remove(name)
+			if rmErr := os.Remove(name); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+				return "", fmt.Errorf("yggconf: writing backup %s: %w (incomplete backup left in place: %v)", name, err, rmErr)
+			}
 			return "", fmt.Errorf("yggconf: writing backup %s: %w", name, err)
 		}
 		return name, nil
@@ -72,5 +78,10 @@ func writeBackup(f *os.File, data []byte, mode os.FileMode, info os.FileInfo) er
 	if err := f.Chmod(mode); err != nil {
 		return err
 	}
-	return preserveOwner(f, info)
+	if err := preserveOwner(f, info); err != nil {
+		return err
+	}
+	// Flush before the caller closes: a crash must not leave a backup that
+	// exists by name but is missing its bytes.
+	return f.Sync()
 }

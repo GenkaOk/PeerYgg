@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 
@@ -47,15 +48,25 @@ type Report struct {
 // directory, are validated there, and only then replace the config in one
 // rename. Any failure leaves the original config untouched and removes the
 // temp file; the backup made before the write stays behind so the user can
-// always restore.
+// always restore. On failure the returned Report is the partial report, which
+// names the backup when one was already made.
+//
+// opts.Path may be a symlink: the link is resolved first and the read, backup,
+// write and rename all target the resolved file, so the link itself survives
+// and the report's Path names the file actually written.
 func Install(opts Options) (*Report, error) {
-	data, err := os.ReadFile(opts.Path)
+	path, err := resolvePath(opts.Path)
 	if err != nil {
-		return nil, sudoHint(fmt.Errorf("yggconf: reading config %s: %w", opts.Path, err))
+		return nil, err
 	}
-	info, err := os.Stat(opts.Path)
+
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, sudoHint(fmt.Errorf("yggconf: stat config %s: %w", opts.Path, err))
+		return nil, sudoHint(fmt.Errorf("yggconf: reading config %s: %w", path, err))
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, sudoHint(fmt.Errorf("yggconf: stat config %s: %w", path, err))
 	}
 
 	out, old, err := ReplacePeers(data, opts.Peers)
@@ -65,7 +76,7 @@ func Install(opts Options) (*Report, error) {
 
 	added, removed := peer.Diff(old, opts.Peers)
 	rep := &Report{
-		Path:    opts.Path,
+		Path:    path,
 		Old:     old,
 		Added:   added,
 		Removed: removed,
@@ -81,32 +92,51 @@ func Install(opts Options) (*Report, error) {
 
 	// The backup comes before any write, so even an interrupted install has a
 	// copy of the bytes the user started with.
-	backup, err := CreateBackup(opts.Path)
+	backup, err := CreateBackup(path)
 	if err != nil {
-		return nil, sudoHint(err)
+		return rep, sudoHint(err)
 	}
 	rep.BackupPath = backup
 
-	tmp := opts.Path + ".tmp-" + strconv.Itoa(os.Getpid())
+	tmp := path + ".tmp-" + strconv.Itoa(os.Getpid())
 	if err := writeTemp(tmp, out, info); err != nil {
 		os.Remove(tmp)
-		return nil, sudoHint(err)
+		return rep, sudoHint(err)
 	}
 
 	checked, err := Validate(tmp)
 	if err != nil {
 		os.Remove(tmp)
-		return nil, err
+		return rep, err
 	}
 	rep.Validated = checked
 
-	if err := renameOver(tmp, opts.Path); err != nil {
+	if err := renameOver(tmp, path); err != nil {
 		os.Remove(tmp)
 		// Name the backup in the error: on Windows the fallback can leave the
 		// config missing, and then the backup is the only copy left.
-		return nil, sudoHint(fmt.Errorf("yggconf: installing config %s (backup at %s): %w", opts.Path, rep.BackupPath, err))
+		return rep, sudoHint(fmt.Errorf("yggconf: installing config %s (backup at %s): %w", path, rep.BackupPath, err))
 	}
 	return rep, nil
+}
+
+// resolvePath returns the file Install must actually write. A config reached
+// through a symlink (dotfiles, nix, a CMS) would be replaced by a regular file
+// by rename, leaving the real config with the old peers; resolve the link so
+// the read, backup, write and rename all touch its target.
+func resolvePath(path string) (string, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "", sudoHint(fmt.Errorf("yggconf: stat config %s: %w", path, err))
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		return path, nil
+	}
+	target, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", sudoHint(fmt.Errorf("yggconf: resolving symlinked config %s: %w", path, err))
+	}
+	return target, nil
 }
 
 // writeTemp writes data to name, giving the new file the permission bits and,

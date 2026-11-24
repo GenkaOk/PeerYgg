@@ -1,13 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/genkaok/PeerYgg/internal/config"
 	"github.com/genkaok/PeerYgg/internal/network"
+	"github.com/genkaok/PeerYgg/internal/yggconf"
 )
 
 func TestSelectedPeers(t *testing.T) {
@@ -76,6 +80,95 @@ func TestInstallPeersRefusesEmptyWrite(t *testing.T) {
 	if string(got) != original {
 		t.Fatalf("refused install changed the config:\n got: %q\nwant: %q", got, original)
 	}
+}
+
+func TestWriteInstallReport(t *testing.T) {
+	t.Run("write", func(t *testing.T) {
+		rep := &yggconf.Report{
+			Path:       "/etc/yggdrasil.conf",
+			BackupPath: "/etc/yggdrasil.conf.bak-20260102-030405",
+			Added:      []string{"tcp://a:443", "tcp://b:443"},
+			Removed:    []string{"tcp://old:443"},
+			Validated:  true,
+		}
+
+		var buf bytes.Buffer
+		writeInstallReport(&buf, rep)
+		got := buf.String()
+
+		restart, _ := yggconf.RestartCommand(runtime.GOOS)
+		for _, want := range []string{
+			"yggdrasil config: /etc/yggdrasil.conf\n",
+			"backup: /etc/yggdrasil.conf.bak-20260102-030405\n",
+			"+2 / -1 peers\n",
+			"restart: " + restart + "\n",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("report does not contain %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, "dry run") {
+			t.Errorf("write report mentions a dry run:\n%s", got)
+		}
+		if strings.Contains(got, "already up to date") {
+			t.Errorf("write report says it was unchanged:\n%s", got)
+		}
+	})
+
+	t.Run("unchanged", func(t *testing.T) {
+		rep := &yggconf.Report{Path: "/etc/yggdrasil.conf", Unchanged: true}
+
+		var buf bytes.Buffer
+		writeInstallReport(&buf, rep)
+		got := buf.String()
+
+		want := "yggdrasil config: /etc/yggdrasil.conf\nalready up to date\n"
+		if got != want {
+			t.Errorf("report = %q, want %q", got, want)
+		}
+		if strings.Contains(got, "restart") {
+			t.Errorf("unchanged report prints a restart command:\n%s", got)
+		}
+	})
+
+	t.Run("dry_run", func(t *testing.T) {
+		rep := &yggconf.Report{
+			Path:   "/etc/yggdrasil.conf",
+			Added:  []string{"tcp://a:443"},
+			DryRun: true,
+		}
+
+		var buf bytes.Buffer
+		writeInstallReport(&buf, rep)
+		got := buf.String()
+
+		want := "yggdrasil config: /etc/yggdrasil.conf\n+1 / -0 peers\ndry run: nothing written\n"
+		if got != want {
+			t.Errorf("report = %q, want %q", got, want)
+		}
+		if strings.Contains(got, "restart") {
+			t.Errorf("dry run prints a restart command:\n%s", got)
+		}
+	})
+}
+
+func TestPrintInstallFailure(t *testing.T) {
+	t.Run("names_backup", func(t *testing.T) {
+		var buf bytes.Buffer
+		printInstallFailure(&buf, &yggconf.Report{BackupPath: "/etc/yggdrasil.conf.bak-1"})
+		if got, want := buf.String(), "backup: /etc/yggdrasil.conf.bak-1\n"; got != want {
+			t.Errorf("output = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("without_backup_is_silent", func(t *testing.T) {
+		var buf bytes.Buffer
+		printInstallFailure(&buf, &yggconf.Report{})
+		printInstallFailure(&buf, nil)
+		if got := buf.String(); got != "" {
+			t.Errorf("output = %q, want empty", got)
+		}
+	})
 }
 
 // writeTestConfig puts a throwaway config with one peer in a temp dir and
