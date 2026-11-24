@@ -101,7 +101,7 @@ Rules the body must satisfy:
 - Zero occurrences: append `\n` if the file does not end with one, then a `Peers: [` block.
 - More than one occurrence: return an error naming the count; do not produce output.
 - Value is not an array: return an error.
-- Old values: split the array body at top-level commas *or* newlines, trim whitespace, strip one layer of matching quotes, drop empty tokens and comment-only lines.
+- Old values: split the array body at top-level commas *or* newlines, then for each token strip a trailing line comment (`#` or `//` outside quotes), trim whitespace, strip one layer of matching quotes, and drop empty tokens. A token like `tcp://old1:443 # fast one` yields `tcp://old1:443`.
 - New block: quote every URI with `"`, indent entries by the indentation of the key's line plus two spaces, closing `]` at the key line's indentation. Terminate entries with `,` if the replaced array body contained a comma outside strings/comments, otherwise newline-separated without commas.
 - Preserve the file's line ending: if the input contains `\r\n`, emit `\r\n` inside the block.
 - Return `out == nil` on any error.
@@ -270,7 +270,7 @@ Expected: FAIL — undefined `Install`, `Options`, `Report`, `Validate`.
 
 - [ ] **Step 3: Implement `Validate` in `internal/yggconf/validate.go`**
 
-`LookPath("yggdrasil")` → when missing return `(false, nil)`. Otherwise run `yggdrasil -normaliseconf -json -useconffile <path>`, capture stdout/stderr with a 10s timeout; non-zero exit → error including trimmed stderr. Unmarshal stdout into `struct{ Peers []string \`json:"Peers"\` }` and compare as sets with the peers parsed from `path` via `ReplacePeers`'s old-value extraction (extract a small `parsePeers(data []byte) ([]string, error)` helper in `patch.go` and use it in both places); mismatch → error. Expose `lookPath` and `runCommand` as package vars for tests.
+`LookPath("yggdrasil")` → when missing return `(false, nil)`. Otherwise run `yggdrasil -normaliseconf -json -useconffile <path>`, capture stdout/stderr with a 10s timeout; non-zero exit → error including trimmed stderr. Unmarshal stdout into `struct{ Peers []string \`json:"Peers"\` }` and compare as sets with the peers parsed from `path` via `ReplacePeers`'s old-value extraction (extract a small `parsePeers(data []byte) ([]string, error)` helper in `patch.go` and use it in both places); mismatch → error. When the file's `Peers` list is empty, skip the set comparison — the normalised output may omit an empty array — and rely on the exit code alone. Expose `lookPath` and `runCommand` as package vars for tests.
 
 - [ ] **Step 4: Implement `Install` in `internal/yggconf/install.go`**
 
