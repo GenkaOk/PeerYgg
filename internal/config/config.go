@@ -75,6 +75,16 @@ func getEnvInt(key string, def int) int {
 	return def
 }
 
+// resolveConfPath picks the yggdrasil config path: an explicit -config flag
+// wins over the PEERS_CONFIG default, so the flag can always override a stale
+// environment. An empty result means autodetect.
+func resolveConfPath(flagValue string) string {
+	if flagValue != "" {
+		return flagValue
+	}
+	return getEnv("PEERS_CONFIG", "")
+}
+
 func Load() *Config {
 	n := flag.Int("n", 5, "number of fastest peers/servers to output")
 	concurrency := flag.Int("c", DefaultConcurrency, "concurrency for pings")
@@ -113,7 +123,7 @@ func Load() *Config {
 		RemoveCmd:    getEnv("PEERS_REMOVE_CMD", ""),
 		DryRun:       *dryRun || getEnv("DRY_RUN", "") == "1",
 		Install:      *install,
-		ConfPath:     getEnv("PEERS_CONFIG", *confPath),
+		ConfPath:     resolveConfPath(*confPath),
 		Concurrency:  *concurrency,
 		TimeoutSec:   *timeout,
 		TopN:         *n,

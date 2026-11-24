@@ -169,7 +169,10 @@ func selectedPeers(selected []network.Result) []string {
 // cfg and reports the result on stderr.
 func installPeers(cfg *config.Config, selected []network.Result) error {
 	peers := selectedPeers(selected)
-	if len(peers) == 0 {
+	// Clearing the peer list is recoverable but disruptive, so a real write
+	// refuses it. A dry run is the one place that change is harmless: it lets
+	// Install report the diff without touching anything.
+	if len(peers) == 0 && !cfg.DryRun {
 		return fmt.Errorf("no peers selected, refusing to empty the yggdrasil Peers list")
 	}
 
