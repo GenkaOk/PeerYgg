@@ -161,17 +161,17 @@ The command keeps the 5 fastest peers and appends up to 2 reachable peers from t
 sudo peerygg -n 5 -install
 ```
 
-It replaces only the `Peers` array. `PrivateKey`, `PrivateKeyPath`, `Listen`, `AdminListen`, `InterfacePeers`, `MulticastInterfaces`, comments and the file's formatting are left untouched, so a hand-maintained HJSON config keeps its shape.
+It replaces only the `Peers` array. `PrivateKey`, `PrivateKeyPath`, `Listen`, `AdminListen`, `InterfacePeers`, `MulticastInterfaces`, comments and the file's formatting elsewhere are left untouched, so a hand-maintained HJSON config keeps its shape. Comments written *inside* the `Peers` array are kept, but move to the top of the rewritten array.
 
-A backup is always written first, next to the config, as `<config>.bak-YYYYMMDD-HHMMSS`. It is a byte-identical copy with the original permissions and owner, and an existing backup is never overwritten. If the backup cannot be created, nothing is written.
+A backup is always written first, next to the config, as `<config>.bak-YYYYMMDD-HHMMSS`. It is a byte-identical copy that keeps the original permissions and, when running as root, the owner. An existing backup is never overwritten: a second run within the same second gets a `-2` suffix (then `-3`, and so on). If the backup cannot be created, nothing is written.
 
-The config path is autodetected in this order: `/etc/yggdrasil/yggdrasil.conf` (Debian/Ubuntu package), `/etc/yggdrasil.conf` (Arch, Fedora/RPM, macOS pkg, generic Linux), `/opt/etc/yggdrasil.conf` (Entware), `/usr/local/etc/yggdrasil.conf` (FreeBSD); on Windows `%ProgramData%\Yggdrasil\yggdrasil.conf`. Override it with `-config /path/to/yggdrasil.conf` or `PEERS_CONFIG` (the flag wins when both are set).
+The config path is autodetected in this order: `/etc/yggdrasil/yggdrasil.conf` (Debian/Ubuntu package), `/etc/yggdrasil.conf` (Arch, Fedora/RPM, macOS pkg, generic Linux), `/opt/etc/yggdrasil.conf` (Entware), `/usr/local/etc/yggdrasil.conf` (FreeBSD); on Windows `%ProgramData%\Yggdrasil\yggdrasil.conf`. Override it with `-config /path/to/yggdrasil.conf` or `PEERS_CONFIG` (the flag wins when both are set). A config reached through a symlink is written at the link target, so the link survives.
 
 Packaged configs are normally `0640` and owned by root (Debian: `root:yggdrasil`), so run with `sudo`. The tool reports a hint when it cannot read or write the file.
 
 When the `yggdrasil` binary is in `PATH`, the new config is validated with `yggdrasil -normaliseconf` before it replaces the original; a rejected config aborts the install and leaves the original intact. Without the binary the check is skipped and reported as `not validated`.
 
-The service is not restarted automatically — the command is printed instead (`systemctl restart yggdrasil`, `launchctl kickstart -k system/yggdrasil`, `service yggdrasil restart`, `Restart-Service Yggdrasil`). Use `-dry-run` to preview the peer diff without writing.
+The service is not restarted automatically — the command is printed instead (`systemctl restart yggdrasil`, `launchctl kickstart -k system/yggdrasil`, `service yggdrasil restart`, `Restart-Service Yggdrasil`). Use `-dry-run`, or `DRY_RUN=1`, to preview the peer diff without writing. A dry run prints `dry run: nothing written` and no restart command.
 
 OpenWrt with the current netifd-based package is not supported: it has no `yggdrasil.conf` and takes its peers from UCI (`/etc/config/network`), so PeerYgg refuses to touch it.
 
