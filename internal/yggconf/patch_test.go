@@ -226,6 +226,122 @@ func TestReplacePeers(t *testing.T) {
 			t.Errorf("old = %v, want nil on error", old)
 		}
 	})
+
+	// hjson-go accepts single-quoted keys, so a 'Peers' key is a real key: the
+	// array must be replaced in place instead of appending a second block that
+	// silently shadows it.
+	t.Run("single_quoted_key", func(t *testing.T) {
+		input := "'Peers': [ \"tcp://old:443\" ]\n"
+
+		out, old, err := ReplacePeers([]byte(input), []string{"tcp://new:443"})
+		if err != nil {
+			t.Fatalf("ReplacePeers() error = %v", err)
+		}
+		if want := []string{"tcp://old:443"}; strings.Join(old, ",") != strings.Join(want, ",") {
+			t.Errorf("old peers = %v, want %v", old, want)
+		}
+		if got := strings.Count(string(out), "Peers"); got != 1 {
+			t.Errorf("out contains %d occurrences of Peers, want 1:\n%s", got, out)
+		}
+		if !strings.Contains(string(out), `"tcp://new:443"`) {
+			t.Errorf("out does not contain the new peer:\n%s", out)
+		}
+		if strings.Contains(string(out), "tcp://old:443") {
+			t.Errorf("out still contains the old peer:\n%s", out)
+		}
+	})
+
+	// A single-quoted value before the array must not swallow the rest of the
+	// file: everything outside the array stays byte-identical.
+	t.Run("single_quoted_value_before_peers", func(t *testing.T) {
+		const prefix = "NodeInfo: { name: 'bob' }\n"
+		input := prefix + "Peers: [ \"tcp://old:443\" ]\n"
+
+		out, old, err := ReplacePeers([]byte(input), []string{"tcp://new:443"})
+		if err != nil {
+			t.Fatalf("ReplacePeers() error = %v", err)
+		}
+		if want := []string{"tcp://old:443"}; strings.Join(old, ",") != strings.Join(want, ",") {
+			t.Errorf("old peers = %v, want %v", old, want)
+		}
+		if !strings.HasPrefix(string(out), prefix) {
+			t.Errorf("bytes before the Peers array changed:\n%s", out)
+		}
+		if got := strings.Count(string(out), "Peers"); got != 1 {
+			t.Errorf("out contains %d occurrences of Peers, want 1:\n%s", got, out)
+		}
+		if strings.Contains(string(out), "tcp://old:443") {
+			t.Errorf("out still contains the old peer:\n%s", out)
+		}
+	})
+
+	// Brackets, braces and comment markers inside a single-quoted value are
+	// plain text: they must not move the depth or comment state.
+	t.Run("single_quoted_value_with_brackets", func(t *testing.T) {
+		const prefix = "NodeInfo: { note: 'a ] } # b' }\n"
+		input := prefix + "Peers: [ \"tcp://old:443\" ]\n"
+
+		out, old, err := ReplacePeers([]byte(input), []string{"tcp://new:443"})
+		if err != nil {
+			t.Fatalf("ReplacePeers() error = %v", err)
+		}
+		if want := []string{"tcp://old:443"}; strings.Join(old, ",") != strings.Join(want, ",") {
+			t.Errorf("old peers = %v, want %v", old, want)
+		}
+		if !strings.HasPrefix(string(out), prefix) {
+			t.Errorf("bytes before the Peers array changed:\n%s", out)
+		}
+		if !strings.Contains(string(out), `"tcp://new:443"`) {
+			t.Errorf("out does not contain the new peer:\n%s", out)
+		}
+		if strings.Contains(string(out), "tcp://old:443") {
+			t.Errorf("out still contains the old peer:\n%s", out)
+		}
+	})
+
+	// Regression guard for the apostrophe-in-a-quoteless-value fix: no closing
+	// quote follows on the line, so the apostrophe is ordinary text.
+	t.Run("apostrophe_in_quoteless_value", func(t *testing.T) {
+		const prefix = "NodeInfo: { name: O'Brien }\n"
+		input := prefix + "Peers: [ \"tcp://old:443\" ]\n"
+
+		out, old, err := ReplacePeers([]byte(input), []string{"tcp://new:443"})
+		if err != nil {
+			t.Fatalf("ReplacePeers() error = %v", err)
+		}
+		if want := []string{"tcp://old:443"}; strings.Join(old, ",") != strings.Join(want, ",") {
+			t.Errorf("old peers = %v, want %v", old, want)
+		}
+		if !strings.HasPrefix(string(out), prefix) {
+			t.Errorf("bytes before the Peers array changed:\n%s", out)
+		}
+		if strings.Contains(string(out), "tcp://old:443") {
+			t.Errorf("out still contains the old peer:\n%s", out)
+		}
+	})
+
+	// The append backstop must not mistake a URI containing "peers" for a key:
+	// `Listen: [ tcp://peers:443 ]` is a document without a Peers key.
+	t.Run("uri_with_peers_token_appends", func(t *testing.T) {
+		input := "Listen: [ tcp://peers:443 ]\n"
+
+		out, old, err := ReplacePeers([]byte(input), []string{"tcp://new:443"})
+		if err != nil {
+			t.Fatalf("ReplacePeers() error = %v", err)
+		}
+		if len(old) != 0 {
+			t.Errorf("old peers = %v, want none", old)
+		}
+		if !strings.HasPrefix(string(out), input) {
+			t.Errorf("existing prefix changed:\n%s", out)
+		}
+		if !strings.Contains(string(out), "tcp://peers:443") {
+			t.Errorf("out lost the Listen URI:\n%s", out)
+		}
+		if !strings.Contains(string(out), `"tcp://new:443"`) {
+			t.Errorf("out does not contain the new peer:\n%s", out)
+		}
+	})
 }
 
 // TestReplacePeersGenconf patches a verbatim `yggdrasil -genconf` document: a

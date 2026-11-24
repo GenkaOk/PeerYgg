@@ -178,7 +178,7 @@ func findPeerArrays(data []byte, rootBrace int) ([]peerArray, error) {
 	for i := skipBOM(data); i < len(data); {
 		c := data[i]
 
-		if c == '"' {
+		if isStringStart(data, i) {
 			end := skipString(data, i)
 			if brace == rootBrace && bracket == 0 {
 				if name, after, ok := readKey(data, i); ok && strings.EqualFold(name, "Peers") {
@@ -256,12 +256,16 @@ func findPeerArrays(data []byte, rootBrace int) ([]peerArray, error) {
 // path: when the top-level scanner missed a key the document really has,
 // appending another block would silently shadow it (hjson-go keeps the last
 // duplicate key), so the patch must fail instead.
+//
+// The match is case-sensitive and readKey only accepts a whole key token
+// followed by a colon, so a URI such as tcp://peers:443 is not mistaken for a
+// key. Only the spelling the daemon writes (and this package appends) counts.
 func hasPeersKey(data []byte) bool {
 	for i := skipBOM(data); i < len(data); {
 		c := data[i]
 		switch {
-		case c == '"':
-			if name, _, ok := readKey(data, i); ok && strings.EqualFold(name, "Peers") {
+		case isStringStart(data, i):
+			if name, _, ok := readKey(data, i); ok && name == "Peers" {
 				return true
 			}
 			i = skipString(data, i)
@@ -271,7 +275,7 @@ func hasPeersKey(data []byte) bool {
 			i = skipBlockComment(data, i)
 		case isBareKeyStart(c):
 			if name, after, ok := readKey(data, i); ok {
-				if strings.EqualFold(name, "Peers") {
+				if name == "Peers" {
 					return true
 				}
 				i = after
@@ -311,7 +315,7 @@ func matchBracket(data []byte, open int) (int, error) {
 	for i := open; i < len(data); {
 		c := data[i]
 		switch {
-		case c == '"':
+		case isStringStart(data, i):
 			i = skipString(data, i)
 		case c == '#' || isLineCommentStart(data, i):
 			i = skipLineComment(data, i)
@@ -388,7 +392,7 @@ func splitPeersBody(body []byte) (tokens [][]byte, comments []string, hadComma b
 	for i := 0; i < len(body); {
 		c := body[i]
 		switch {
-		case c == '"':
+		case isStringStart(body, i):
 			end := skipString(body, i)
 			cur = append(cur, body[i:end]...)
 			i = end
@@ -444,7 +448,7 @@ func escapePeer(s string) string {
 // readKey parses a bare or quoted key at i followed by a colon. valueStart is
 // the offset just past the colon.
 func readKey(data []byte, i int) (name string, valueStart int, ok bool) {
-	if data[i] == '"' {
+	if isStringStart(data, i) {
 		end := skipString(data, i)
 		if end <= i+1 || end > len(data) || data[end-1] != data[i] {
 			return "", 0, false
@@ -496,16 +500,40 @@ func isLineCommentStart(data []byte, i int) bool {
 	return false
 }
 
-// skipString returns the offset just past the double-quoted string starting at
-// i. HJSON has no single-quoted strings, so an apostrophe is ordinary text and
-// must never start a string: treating one as a quote would swallow the rest of
-// the file.
+// isStringStart reports whether a quoted string starts at i. A double quote
+// always does. hjson-go also accepts single-quoted strings, but an apostrophe
+// inside a quoteless value (name: O'Brien) is ordinary text: it starts a string
+// only when a closing quote follows on the same line. Treating a lone
+// apostrophe as a quote would swallow the rest of the file.
+func isStringStart(data []byte, i int) bool {
+	switch data[i] {
+	case '"':
+		return true
+	case '\'':
+		for j := i + 1; j < len(data); j++ {
+			switch data[j] {
+			case '\\':
+				j++
+			case '\n', '\r':
+				return false
+			case '\'':
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// skipString returns the offset just past the quoted string starting at i,
+// which isStringStart must have accepted. The string ends at the next unescaped
+// quote of the same kind.
 func skipString(data []byte, i int) int {
+	quote := data[i]
 	for j := i + 1; j < len(data); j++ {
 		switch data[j] {
 		case '\\':
 			j++
-		case '"':
+		case quote:
 			return j + 1
 		}
 	}
