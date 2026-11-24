@@ -33,6 +33,13 @@ func ReplacePeers(data []byte, peers []string) (out []byte, old []string, err er
 
 	switch len(occurrences) {
 	case 0:
+		if rootBrace == 1 {
+			// Appending after the root object would leave trailing content
+			// outside {} and produce a document that parses as neither JSON
+			// nor HJSON. Fail closed instead of writing an invalid config.
+			return nil, nil, fmt.Errorf("yggconf: braced root document has no top-level Peers key; refusing to append outside the root object")
+		}
+
 		nl := lineEnding(data)
 		encoded := append([]byte("Peers: "), buildPeersArray("", peers, nil, commaNone, nl)...)
 
