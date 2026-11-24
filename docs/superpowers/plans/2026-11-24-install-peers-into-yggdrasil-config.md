@@ -314,7 +314,7 @@ Expected: FAIL — undefined `selectedPeers`.
 
 - [ ] **Step 3: Implement the flags and the install step**
 
-In `config.Load`: `install := flag.Bool("install", false, "write selected peers into the yggdrasil config")`, `confPath := flag.String("config", "", "path to the yggdrasil config (default: autodetect)")`, `dryRun := flag.Bool("dry-run", false, "show config changes without writing")`; set `Install: *install`, `ConfPath: getEnv("PEERS_CONFIG", *confPath)`, `DryRun: *dryRun || getEnv("DRY_RUN", "") == "1"`.
+In `config.Load`: `install := flag.Bool("install", false, "write selected peers into the yggdrasil config")`, `confPath := flag.String("config", "", "path to the yggdrasil config (default: autodetect)")`, `dryRun := flag.Bool("dry-run", false, "show config changes without writing")`; set `Install: *install`, `ConfPath: resolveConfPath(*confPath)` (flag → `PEERS_CONFIG` → empty, per the spec's "PEERS_CONFIG как путь по умолчанию" — the flag wins), `DryRun: *dryRun || getEnv("DRY_RUN", "") == "1"`.
 
 In `main`, after `storage.SaveLocal`, when `cfg.Install` is set: resolve the path with `yggconf.Detect(cfg.ConfPath)`, call `yggconf.Install`, then print to stderr — the config path, `backup: <path>` when non-empty, `+N / -M peers`, `already up to date` when `Unchanged`, a `not validated (yggdrasil not found)` line when `!Validated`, and `restart: <cmd>` from `RestartCommand(runtime.GOOS)` (fall back to a generic sentence when `known` is false). On any error print it and `os.Exit(1)` — the already-printed results stay valid.
 

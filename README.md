@@ -28,6 +28,7 @@ most efficient connections.
 - **Flexible output formats** — export results as table, configuration file, or JSON for easy integration and analysis
 - **Group results** — group peers by IP address for better organization and analysis
 - **Preferred country** — guarantee peers from a chosen destination country (e.g. `-country nl`) alongside the fastest peers
+- **Config install** — write the fastest peers into the yggdrasil config (`-install`) with an automatic timestamped backup
 - **Compatibility** – Good compatibility with various types of architectures (x64, ARM, ARMv5-7, MIPS(LE))
 
 ![demo](assets/demo.gif)
@@ -112,14 +113,20 @@ Utility supported next OS:
 Usage of PeerYgg:
   -c int
     	concurrency for pings (default 30)
+  -config string
+    	path to the yggdrasil config (default: autodetect)
   -country string
         preferred destination country (slug or ISO code, e.g. nl)
   -country-count int
         number of peers to guarantee for the preferred country (default 2)
+  -dry-run
+        show config changes without writing
   -group
     	group peers by host and select best connection per server
   -insecure
     	allow skip SSL verification
+  -install
+    	write selected peers into the yggdrasil config
   -n int
     	number of fastest peers/servers to output (default 5)
   -output string
@@ -145,6 +152,28 @@ peerygg -n 5 -country nl -country-count 2
 ```
 
 The command keeps the 5 fastest peers and appends up to 2 reachable peers from the Netherlands that are not already in that list. If fewer than 2 peers in the target country are reachable, the shortfall is filled with the fastest peers from the same region (for the Netherlands, `europe`). `-country` accepts a slug, an ISO alpha-2 code, or a common name (`nl`, `netherlands`, `holland`). The output is capped at `n + country-count`; in the default output selected peers are marked `*` (target country) or `~` (nearby region), and in the table the marks appear in the `PREF` column. Environment variables: `PEERS_COUNTRY`, `PEERS_COUNTRY_COUNT`.
+
+#### Install into the yggdrasil config
+
+`-install` writes the selected peers straight into the yggdrasil daemon config:
+
+```bash
+sudo peerygg -n 5 -install
+```
+
+It replaces only the `Peers` array. `PrivateKey`, `PrivateKeyPath`, `Listen`, `AdminListen`, `InterfacePeers`, `MulticastInterfaces`, comments and the file's formatting are left untouched, so a hand-maintained HJSON config keeps its shape.
+
+A backup is always written first, next to the config, as `<config>.bak-YYYYMMDD-HHMMSS`. It is a byte-identical copy with the original permissions and owner, and an existing backup is never overwritten. If the backup cannot be created, nothing is written.
+
+The config path is autodetected in this order: `/etc/yggdrasil/yggdrasil.conf` (Debian/Ubuntu package), `/etc/yggdrasil.conf` (Arch, Fedora/RPM, macOS pkg, generic Linux), `/opt/etc/yggdrasil.conf` (Entware), `/usr/local/etc/yggdrasil.conf` (FreeBSD); on Windows `%ProgramData%\Yggdrasil\yggdrasil.conf`. Override it with `-config /path/to/yggdrasil.conf` or `PEERS_CONFIG` (the flag wins when both are set).
+
+Packaged configs are normally `0640` and owned by root (Debian: `root:yggdrasil`), so run with `sudo`. The tool reports a hint when it cannot read or write the file.
+
+When the `yggdrasil` binary is in `PATH`, the new config is validated with `yggdrasil -normaliseconf` before it replaces the original; a rejected config aborts the install and leaves the original intact. Without the binary the check is skipped and reported as `not validated`.
+
+The service is not restarted automatically — the command is printed instead (`systemctl restart yggdrasil`, `launchctl kickstart -k system/yggdrasil`, `service yggdrasil restart`, `Restart-Service Yggdrasil`). Use `-dry-run` to preview the peer diff without writing.
+
+OpenWrt with the current netifd-based package is not supported: it has no `yggdrasil.conf` and takes its peers from UCI (`/etc/config/network`), so PeerYgg refuses to touch it.
 
 #### Output Formats
 
