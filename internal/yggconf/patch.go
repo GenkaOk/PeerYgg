@@ -15,16 +15,12 @@ import (
 // with the peer URIs that were in the array before.
 //
 // Everything outside the array value is copied verbatim. When the document has
-// no top-level Peers key, a Peers block is appended. More than one top-level
-// Peers key, or a Peers value that is not an array, is an error; out is nil on
-// any error.
+// no top-level Peers key, a Peers block is appended; a document wrapped in a
+// root object ({...}) cannot take that trailing block and is an error instead.
+// More than one top-level Peers key, or a Peers value that is not an array, is
+// also an error; out is nil on any error.
 func ReplacePeers(data []byte, peers []string) (out []byte, old []string, err error) {
-	rootBrace := 0
-	if firstSignificant(data) == '{' {
-		// A JSON document wraps its top-level keys in the root object, so they
-		// live one brace deeper than in bare HJSON.
-		rootBrace = 1
-	}
+	rootBrace := rootDepth(data)
 
 	occurrences, err := findPeerArrays(data, rootBrace)
 	if err != nil {
@@ -58,13 +54,11 @@ func ReplacePeers(data []byte, peers []string) (out []byte, old []string, err er
 	}
 
 	occ := occurrences[0]
-	tokens, comments, hadComma := splitPeersBody(data[occ.open+1 : occ.close])
+	_, comments, hadComma := splitPeersBody(data[occ.open+1 : occ.close])
 
-	old = make([]string, 0, len(tokens))
-	for _, tok := range tokens {
-		if v := cleanPeerToken(tok); v != "" {
-			old = append(old, v)
-		}
+	old, err = parsePeers(data)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	style := commaNone
@@ -84,6 +78,42 @@ func ReplacePeers(data []byte, peers []string) (out []byte, old []string, err er
 	buf = append(buf, encoded...)
 	buf = append(buf, data[occ.close+1:]...)
 	return buf, old, nil
+}
+
+// rootDepth returns the brace depth at which top-level keys live: 1 for a JSON
+// document wrapped in the root object, 0 for bare HJSON.
+func rootDepth(data []byte) int {
+	if firstSignificant(data) == '{' {
+		return 1
+	}
+	return 0
+}
+
+// parsePeers returns the peer URIs of the document's top-level Peers array,
+// unquoted, or an empty list when it has none. It applies the same structural
+// rules as ReplacePeers — a non-array value and duplicate top-level Peers keys
+// are errors — so peers read here belong to an array ReplacePeers can rewrite.
+func parsePeers(data []byte) ([]string, error) {
+	occurrences, err := findPeerArrays(data, rootDepth(data))
+	if err != nil {
+		return nil, err
+	}
+	switch len(occurrences) {
+	case 0:
+		return []string{}, nil
+	case 1:
+		occ := occurrences[0]
+		tokens, _, _ := splitPeersBody(data[occ.open+1 : occ.close])
+		peers := make([]string, 0, len(tokens))
+		for _, tok := range tokens {
+			if v := cleanPeerToken(tok); v != "" {
+				peers = append(peers, v)
+			}
+		}
+		return peers, nil
+	default:
+		return nil, fmt.Errorf("yggconf: %d top-level Peers keys found, want at most one", len(occurrences))
+	}
 }
 
 // peerArray is a top-level Peers key together with the byte range of its
