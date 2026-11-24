@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // ReplacePeers replaces the value of the top-level Peers array with peers,
@@ -20,6 +21,10 @@ import (
 // More than one top-level Peers key, or a Peers value that is not an array, is
 // also an error; out is nil on any error.
 func ReplacePeers(data []byte, peers []string) (out []byte, old []string, err error) {
+	if err := checkText(data); err != nil {
+		return nil, nil, err
+	}
+
 	rootBrace := rootDepth(data)
 
 	occurrences, err := findPeerArrays(data, rootBrace)
@@ -34,6 +39,13 @@ func ReplacePeers(data []byte, peers []string) (out []byte, old []string, err er
 			// outside {} and produce a document that parses as neither JSON
 			// nor HJSON. Fail closed instead of writing an invalid config.
 			return nil, nil, fmt.Errorf("yggconf: braced root document has no top-level Peers key; refusing to append outside the root object")
+		}
+		if hasPeersKey(data) {
+			// The scanner found no top-level Peers key but the document does
+			// contain one the scanner could not reach (an unusual layout, or a
+			// bug). Appending would create a duplicate key: hjson-go keeps the
+			// last one, so the damage would look like a successful install.
+			return nil, nil, fmt.Errorf("yggconf: no top-level Peers key was found, but the document contains a Peers key; refusing to append a duplicate")
 		}
 
 		nl := lineEnding(data)
@@ -78,6 +90,38 @@ func ReplacePeers(data []byte, peers []string) (out []byte, old []string, err er
 	buf = append(buf, encoded...)
 	buf = append(buf, data[occ.close+1:]...)
 	return buf, old, nil
+}
+
+// checkText rejects documents PeerYgg cannot patch safely. yggdrasil accepts
+// UTF-16 with a BOM, but the patcher works on UTF-8 bytes: appending an ASCII
+// block to a UTF-16 file would make it unparseable. A NUL byte or invalid
+// UTF-8 is equally unusable. A UTF-8 BOM is fine and stays in the output.
+func checkText(data []byte) error {
+	if len(data) >= 2 {
+		switch {
+		case data[0] == 0xFF && data[1] == 0xFE:
+			return fmt.Errorf("yggconf: config starts with a UTF-16LE byte-order mark (FF FE); only UTF-8 HJSON can be patched safely")
+		case data[0] == 0xFE && data[1] == 0xFF:
+			return fmt.Errorf("yggconf: config starts with a UTF-16BE byte-order mark (FE FF); only UTF-8 HJSON can be patched safely")
+		}
+	}
+	if i := bytes.IndexByte(data, 0); i >= 0 {
+		return fmt.Errorf("yggconf: config contains a NUL byte at offset %d; it is not UTF-8 HJSON", i)
+	}
+	if !utf8.Valid(data) {
+		return fmt.Errorf("yggconf: config is not valid UTF-8 HJSON")
+	}
+	return nil
+}
+
+// skipBOM returns the offset just past a leading UTF-8 byte-order mark, or 0
+// when there is none. The BOM stays in the document bytes; only scanning skips
+// it, so a BOM never hides a braced root from the scanner.
+func skipBOM(data []byte) int {
+	if bytes.HasPrefix(data, []byte{0xEF, 0xBB, 0xBF}) {
+		return 3
+	}
+	return 0
 }
 
 // rootDepth returns the brace depth at which top-level keys live: 1 for a JSON
@@ -131,10 +175,10 @@ func findPeerArrays(data []byte, rootBrace int) ([]peerArray, error) {
 	var found []peerArray
 	brace, bracket := 0, 0
 
-	for i := 0; i < len(data); {
+	for i := skipBOM(data); i < len(data); {
 		c := data[i]
 
-		if c == '"' || c == '\'' {
+		if c == '"' {
 			end := skipString(data, i)
 			if brace == rootBrace && bracket == 0 {
 				if name, after, ok := readKey(data, i); ok && strings.EqualFold(name, "Peers") {
@@ -207,6 +251,42 @@ func findPeerArrays(data []byte, rootBrace int) ([]peerArray, error) {
 	return found, nil
 }
 
+// hasPeersKey reports whether the document contains a Peers key at any depth,
+// ignoring comments and string contents. It is the safety net for the append
+// path: when the top-level scanner missed a key the document really has,
+// appending another block would silently shadow it (hjson-go keeps the last
+// duplicate key), so the patch must fail instead.
+func hasPeersKey(data []byte) bool {
+	for i := skipBOM(data); i < len(data); {
+		c := data[i]
+		switch {
+		case c == '"':
+			if name, _, ok := readKey(data, i); ok && strings.EqualFold(name, "Peers") {
+				return true
+			}
+			i = skipString(data, i)
+		case c == '#' || isLineCommentStart(data, i):
+			i = skipLineComment(data, i)
+		case c == '/' && i+1 < len(data) && data[i+1] == '*':
+			i = skipBlockComment(data, i)
+		case isBareKeyStart(c):
+			if name, after, ok := readKey(data, i); ok {
+				if strings.EqualFold(name, "Peers") {
+					return true
+				}
+				i = after
+				continue
+			}
+			for i < len(data) && isBareKeyChar(data[i]) {
+				i++
+			}
+		default:
+			i++
+		}
+	}
+	return false
+}
+
 // peerArrayAt validates that the value starting at valueStart is an array and
 // returns its byte range. next is the offset just past the closing ']'.
 func peerArrayAt(data []byte, keyStart, valueStart int) (peerArray, int, error) {
@@ -231,7 +311,7 @@ func matchBracket(data []byte, open int) (int, error) {
 	for i := open; i < len(data); {
 		c := data[i]
 		switch {
-		case c == '"' || c == '\'':
+		case c == '"':
 			i = skipString(data, i)
 		case c == '#' || isLineCommentStart(data, i):
 			i = skipLineComment(data, i)
@@ -308,7 +388,7 @@ func splitPeersBody(body []byte) (tokens [][]byte, comments []string, hadComma b
 	for i := 0; i < len(body); {
 		c := body[i]
 		switch {
-		case c == '"' || c == '\'':
+		case c == '"':
 			end := skipString(body, i)
 			cur = append(cur, body[i:end]...)
 			i = end
@@ -350,11 +430,8 @@ func splitPeersBody(body []byte) (tokens [][]byte, comments []string, hadComma b
 // quotes and drops tokens that carry no value.
 func cleanPeerToken(tok []byte) string {
 	s := strings.TrimSpace(string(tok))
-	if len(s) >= 2 {
-		q := s[0]
-		if (q == '"' || q == '\'') && s[len(s)-1] == q {
-			s = strings.TrimSpace(s[1 : len(s)-1])
-		}
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		s = strings.TrimSpace(s[1 : len(s)-1])
 	}
 	return s
 }
@@ -367,7 +444,7 @@ func escapePeer(s string) string {
 // readKey parses a bare or quoted key at i followed by a colon. valueStart is
 // the offset just past the colon.
 func readKey(data []byte, i int) (name string, valueStart int, ok bool) {
-	if data[i] == '"' || data[i] == '\'' {
+	if data[i] == '"' {
 		end := skipString(data, i)
 		if end <= i+1 || end > len(data) || data[end-1] != data[i] {
 			return "", 0, false
@@ -419,13 +496,16 @@ func isLineCommentStart(data []byte, i int) bool {
 	return false
 }
 
+// skipString returns the offset just past the double-quoted string starting at
+// i. HJSON has no single-quoted strings, so an apostrophe is ordinary text and
+// must never start a string: treating one as a quote would swallow the rest of
+// the file.
 func skipString(data []byte, i int) int {
-	quote := data[i]
 	for j := i + 1; j < len(data); j++ {
-		switch {
-		case quote == '"' && data[j] == '\\':
+		switch data[j] {
+		case '\\':
 			j++
-		case data[j] == quote:
+		case '"':
 			return j + 1
 		}
 	}
@@ -474,7 +554,7 @@ func skipHorizontalSpace(data []byte, i int) int {
 // firstSignificant returns the first byte that is not whitespace or part of a
 // comment, or 0 when the document has none.
 func firstSignificant(data []byte) byte {
-	for i := 0; i < len(data); {
+	for i := skipBOM(data); i < len(data); {
 		switch {
 		case data[i] == ' ' || data[i] == '\t' || data[i] == '\r' || data[i] == '\n':
 			i++

@@ -3,6 +3,8 @@ package yggconf
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -224,6 +226,182 @@ func TestReplacePeers(t *testing.T) {
 			t.Errorf("old = %v, want nil on error", old)
 		}
 	})
+}
+
+// TestReplacePeersGenconf patches a verbatim `yggdrasil -genconf` document: a
+// braced root, // comments, Peers: [] and a PrivateKey. Everything outside the
+// array must survive byte for byte.
+func TestReplacePeersGenconf(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "yggdrasil-genconf.conf"))
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+
+	before, err := findPeerArrays(data, rootDepth(data))
+	if err != nil {
+		t.Fatalf("find original Peers: %v", err)
+	}
+	if len(before) != 1 {
+		t.Fatalf("fixture has %d Peers arrays, want 1", len(before))
+	}
+
+	peers := []string{"tls://new1.example:443", "tls://new2.example:443"}
+	out, old, err := ReplacePeers(data, peers)
+	if err != nil {
+		t.Fatalf("ReplacePeers() error = %v", err)
+	}
+	if len(old) != 0 {
+		t.Errorf("old peers = %v, want none (fixture starts with Peers: [])", old)
+	}
+
+	after, err := findPeerArrays(out, rootDepth(out))
+	if err != nil {
+		t.Fatalf("find patched Peers: %v", err)
+	}
+	if len(after) != 1 {
+		t.Fatalf("patched document has %d Peers arrays, want 1:\n%s", len(after), out)
+	}
+	if !bytes.Equal(data[:before[0].open], out[:after[0].open]) {
+		t.Error("bytes before the Peers array changed")
+	}
+	if !bytes.Equal(data[before[0].close+1:], out[after[0].close+1:]) {
+		t.Error("bytes after the Peers array changed")
+	}
+
+	got, err := parsePeers(out)
+	if err != nil {
+		t.Fatalf("parsePeers(patched): %v", err)
+	}
+	if strings.Join(got, ",") != strings.Join(peers, ",") {
+		t.Errorf("patched peers = %v, want %v", got, peers)
+	}
+	for _, want := range []string{"PrivateKey:", "Listen: []", "InterfacePeers: {}", "NodeInfo: {}", "# List of outbound peer connection strings"} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("patched document lost %q", want)
+		}
+	}
+}
+
+func TestReplacePeersRejectsNonUTF8(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  []byte
+		detail string
+	}{
+		{
+			name:   "utf16le_bom",
+			input:  []byte{0xFF, 0xFE, 'P', 0, 'e', 0, 'e', 0, 'r', 0, 's', 0, ':', 0, ' ', 0, '[', 0, ']', 0},
+			detail: "UTF-16",
+		},
+		{
+			name:   "utf16be_bom",
+			input:  []byte{0xFE, 0xFF, 0, 'P', 0, 'e', 0, 'e', 0, 'r', 0, 's'},
+			detail: "UTF-16",
+		},
+		{
+			name:   "nul_byte",
+			input:  []byte("Peers: []\x00\n"),
+			detail: "NUL",
+		},
+		{
+			name:   "invalid_utf8",
+			input:  []byte{'P', 'e', 'e', 'r', 's', ':', ' ', '[', 0xC3, 0x28, ']'},
+			detail: "UTF-8",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, old, err := ReplacePeers(tt.input, []string{"tcp://new:443"})
+			if err == nil {
+				t.Fatal("ReplacePeers() error = nil, want an encoding error")
+			}
+			if out != nil {
+				t.Errorf("out = %q, want nil on error", out)
+			}
+			if old != nil {
+				t.Errorf("old = %v, want nil on error", old)
+			}
+			if !strings.Contains(err.Error(), tt.detail) {
+				t.Errorf("error %q does not name %q", err, tt.detail)
+			}
+		})
+	}
+}
+
+func TestReplacePeersUTF8BOM(t *testing.T) {
+	bom := []byte{0xEF, 0xBB, 0xBF}
+	body := `{"PrivateKey":"abc","Peers":["tcp://old:443"],"Listen":["tcp://[::]:0"]}`
+	input := append(append([]byte(nil), bom...), body...)
+
+	out, old, err := ReplacePeers(input, []string{"tcp://new:443"})
+	if err != nil {
+		t.Fatalf("ReplacePeers() error = %v", err)
+	}
+	if !bytes.HasPrefix(out, bom) {
+		t.Error("out lost the UTF-8 BOM")
+	}
+	if want := []string{"tcp://old:443"}; strings.Join(old, ",") != strings.Join(want, ",") {
+		t.Errorf("old peers = %v, want %v", old, want)
+	}
+	if got := strings.Count(string(out), "Peers"); got != 1 {
+		t.Errorf("out contains %d Peers keys, want 1:\n%s", got, out)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(out[len(bom):], &parsed); err != nil {
+		t.Fatalf("out without BOM is not valid JSON: %v\n%s", err, out)
+	}
+	if parsed["PrivateKey"] != "abc" {
+		t.Errorf("PrivateKey = %v, want abc", parsed["PrivateKey"])
+	}
+}
+
+// A single apostrophe in a quoteless HJSON value used to start a "string" that
+// ran to EOF, hiding the real Peers array and appending a duplicate block.
+func TestReplacePeersApostropheBeforePeers(t *testing.T) {
+	input := "NodeInfo: { name: O'Brien }\nPeers: [\n  tcp://old:443\n]\nListen: []\n"
+
+	out, old, err := ReplacePeers([]byte(input), []string{"tcp://new:443"})
+	if err != nil {
+		t.Fatalf("ReplacePeers() error = %v", err)
+	}
+	if want := []string{"tcp://old:443"}; strings.Join(old, ",") != strings.Join(want, ",") {
+		t.Errorf("old peers = %v, want %v", old, want)
+	}
+	if got := strings.Count(string(out), "Peers:"); got != 1 {
+		t.Errorf("out contains %d Peers keys, want 1:\n%s", got, out)
+	}
+	if !strings.Contains(string(out), "O'Brien") {
+		t.Errorf("out lost the NodeInfo value:\n%s", out)
+	}
+	if !strings.Contains(string(out), `"tcp://new:443"`) {
+		t.Errorf("out does not contain the new peer:\n%s", out)
+	}
+	if strings.Contains(string(out), "tcp://old:443") {
+		t.Errorf("out still contains the old peer:\n%s", out)
+	}
+}
+
+// TestReplacePeersSafetyNet covers a document the scanner cannot reach: a Peers
+// key exists, but only inside a nested map, so the top-level scan finds none.
+// Appending a second block would be invisible damage; failing closed is safer.
+func TestReplacePeersSafetyNet(t *testing.T) {
+	input := "Tunnel: { Peers: [] }\nListen: []\n"
+
+	out, old, err := ReplacePeers([]byte(input), []string{"tcp://new:443"})
+	if err == nil {
+		t.Fatalf("ReplacePeers() error = nil, want a refusal to append next to a Peers key")
+	}
+	if out != nil {
+		t.Errorf("out = %q, want nil on error", out)
+	}
+	if old != nil {
+		t.Errorf("old = %v, want nil on error", old)
+	}
+	if !strings.Contains(err.Error(), "Peers") {
+		t.Errorf("error %q does not name Peers", err)
+	}
 }
 
 // assertPeerLinesEndWithComma checks every quoted URI entry line of out for the
