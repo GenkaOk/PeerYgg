@@ -2,9 +2,11 @@ package yggconf
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -158,6 +160,147 @@ func TestInstall(t *testing.T) {
 			t.Errorf("installed mode = %o, want 640", perm)
 		}
 
+		for _, name := range dirEntries(t, dir) {
+			if strings.Contains(name, ".tmp-") {
+				t.Errorf("temp file %q left behind", name)
+			}
+		}
+	})
+
+	t.Run("stale_temp_symlink_is_replaced", func(t *testing.T) {
+		isolatePath(t)
+		dir := t.TempDir()
+		conf := filepath.Join(dir, "yggdrasil.conf")
+		writeConfig(t, conf, sampleConf, 0o640)
+		victim := filepath.Join(dir, "victim")
+		writeConfig(t, victim, "do not touch\n", 0o644)
+		tmp := conf + ".tmp-" + strconv.Itoa(os.Getpid())
+		if err := os.Symlink(victim, tmp); err != nil {
+			t.Skipf("symlinks unsupported here: %v", err)
+		}
+		stubLookPath(t, "/usr/local/bin/yggdrasil", nil)
+		stubRunCommand(t, func(string, ...string) ([]byte, []byte, error) {
+			return []byte(`{"Peers":["tcp://new:443"]}`), nil, nil
+		})
+
+		if _, err := Install(Options{Path: conf, Peers: []string{"tcp://new:443"}}); err != nil {
+			t.Fatalf("Install: %v", err)
+		}
+
+		gotVictim, err := os.ReadFile(victim)
+		if err != nil {
+			t.Fatalf("read victim: %v", err)
+		}
+		if string(gotVictim) != "do not touch\n" {
+			t.Errorf("install followed the planted symlink and wrote %q into the victim", gotVictim)
+		}
+		info, err := os.Stat(victim)
+		if err != nil {
+			t.Fatalf("stat victim: %v", err)
+		}
+		if perm := info.Mode().Perm(); perm != 0o644 {
+			t.Errorf("victim mode = %o, want 644", perm)
+		}
+		after, err := os.ReadFile(conf)
+		if err != nil {
+			t.Fatalf("read config: %v", err)
+		}
+		if !strings.Contains(string(after), `"tcp://new:443"`) {
+			t.Error("config was not updated")
+		}
+		if _, err := os.Lstat(tmp); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("temp path still present: %v", err)
+		}
+	})
+
+	t.Run("windows_rename_exist_replaces_config", func(t *testing.T) {
+		isolatePath(t)
+		dir := t.TempDir()
+		conf := filepath.Join(dir, "yggdrasil.conf")
+		writeConfig(t, conf, sampleConf, 0o640)
+		stubLookPath(t, "/usr/local/bin/yggdrasil", nil)
+		stubRunCommand(t, func(string, ...string) ([]byte, []byte, error) {
+			return []byte(`{"Peers":["tcp://new:443"]}`), nil, nil
+		})
+		prevGoos, prevRename := goos, renameFile
+		goos = "windows"
+		t.Cleanup(func() { goos, renameFile = prevGoos, prevRename })
+		calls := 0
+		renameFile = func(oldpath, newpath string) error {
+			calls++
+			// Mimic Windows: renaming onto an existing destination fails.
+			if _, err := os.Stat(newpath); err == nil {
+				return &os.LinkError{Op: "rename", Old: oldpath, New: newpath, Err: fs.ErrExist}
+			}
+			return os.Rename(oldpath, newpath)
+		}
+
+		if _, err := Install(Options{Path: conf, Peers: []string{"tcp://new:443"}}); err != nil {
+			t.Fatalf("Install: %v", err)
+		}
+		if calls != 2 {
+			t.Errorf("rename called %d times, want 2 (fail on existing, retry after remove)", calls)
+		}
+		after, err := os.ReadFile(conf)
+		if err != nil {
+			t.Fatalf("read config: %v", err)
+		}
+		if !strings.Contains(string(after), `"tcp://new:443"`) {
+			t.Errorf("config was not replaced:\n%s", after)
+		}
+		if strings.Contains(string(after), "tcp://old:443") {
+			t.Error("config still has the old peer")
+		}
+		for _, name := range dirEntries(t, dir) {
+			if strings.Contains(name, ".tmp-") {
+				t.Errorf("temp file %q left behind", name)
+			}
+		}
+	})
+
+	t.Run("rename_refused_keeps_config_and_names_backup", func(t *testing.T) {
+		isolatePath(t)
+		dir := t.TempDir()
+		conf := filepath.Join(dir, "yggdrasil.conf")
+		writeConfig(t, conf, sampleConf, 0o640)
+		before, err := os.ReadFile(conf)
+		if err != nil {
+			t.Fatalf("read original: %v", err)
+		}
+		stubLookPath(t, "/usr/local/bin/yggdrasil", nil)
+		stubRunCommand(t, func(string, ...string) ([]byte, []byte, error) {
+			return []byte(`{"Peers":["tcp://new:443"]}`), nil, nil
+		})
+		prevGoos, prevRename := goos, renameFile
+		goos = "windows"
+		t.Cleanup(func() { goos, renameFile = prevGoos, prevRename })
+		renameFile = func(oldpath, newpath string) error {
+			// An unclassified failure (not "destination exists") must never
+			// make Install delete the live config.
+			return &os.LinkError{Op: "rename", Old: oldpath, New: newpath, Err: errors.New("filter driver rejected the rename")}
+		}
+
+		_, installErr := Install(Options{Path: conf, Peers: []string{"tcp://new:443"}})
+		if installErr == nil {
+			t.Fatal("Install succeeded despite a failing rename")
+		}
+		after, err := os.ReadFile(conf)
+		if err != nil {
+			t.Fatalf("read config: %v", err)
+		}
+		if string(after) != string(before) {
+			t.Error("failed rename modified the config")
+		}
+		backups, err := filepath.Glob(conf + ".bak-*")
+		if err != nil {
+			t.Fatalf("glob backups: %v", err)
+		}
+		if len(backups) != 1 {
+			t.Fatalf("backups = %v, want exactly one", backups)
+		}
+		if !strings.Contains(installErr.Error(), backups[0]) {
+			t.Errorf("error %q does not name the backup %q", installErr, backups[0])
+		}
 		for _, name := range dirEntries(t, dir) {
 			if strings.Contains(name, ".tmp-") {
 				t.Errorf("temp file %q left behind", name)

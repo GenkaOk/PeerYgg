@@ -11,6 +11,13 @@ import (
 	"github.com/genkaok/PeerYgg/internal/peer"
 )
 
+// goos and renameFile are test seams: tests set goos to "windows" and replace
+// renameFile to exercise the remove-then-rename fallback on any platform.
+var (
+	goos       = runtime.GOOS
+	renameFile = os.Rename
+)
+
 // Options describes one install of peers into a yggdrasil config.
 type Options struct {
 	Path   string
@@ -95,7 +102,9 @@ func Install(opts Options) (*Report, error) {
 
 	if err := renameOver(tmp, opts.Path); err != nil {
 		os.Remove(tmp)
-		return nil, sudoHint(fmt.Errorf("yggconf: installing config %s: %w", opts.Path, err))
+		// Name the backup in the error: on Windows the fallback can leave the
+		// config missing, and then the backup is the only copy left.
+		return nil, sudoHint(fmt.Errorf("yggconf: installing config %s (backup at %s): %w", opts.Path, rep.BackupPath, err))
 	}
 	return rep, nil
 }
@@ -103,7 +112,16 @@ func Install(opts Options) (*Report, error) {
 // writeTemp writes data to name, giving the new file the permission bits and,
 // best effort, the owner of the config it will replace.
 func writeTemp(name string, data []byte, info os.FileInfo) error {
-	f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	// O_EXCL refuses to follow a symlink or reuse a file planted at the
+	// predictable temp name; only a leftover from a crashed run is reused,
+	// after removing it once.
+	f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if errors.Is(err, fs.ErrExist) {
+		if rmErr := os.Remove(name); rmErr != nil && !errors.Is(rmErr, fs.ErrNotExist) {
+			return fmt.Errorf("yggconf: removing stale temp config %s: %w", name, rmErr)
+		}
+		f, err = os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	}
 	if err != nil {
 		return fmt.Errorf("yggconf: writing temp config %s: %w", name, err)
 	}
@@ -133,26 +151,28 @@ func writeTemp(name string, data []byte, info os.FileInfo) error {
 }
 
 // renameOver atomically replaces path with tmp. POSIX rename replaces an
-// existing destination in one step. Windows cannot, so it falls back to
-// removing the destination first, which is a brief window where the config
-// does not exist; every other platform keeps the atomic path.
+// existing destination in one step. Windows may refuse to replace an existing
+// file: only when the rename error says the destination exists (fs.ErrExist)
+// is the destination removed and the rename retried once. Any other error is
+// returned without touching the live config, because deleting a file we cannot
+// write is not recoverable. The remove-then-rename path has a brief window
+// without a config and is not atomic; the backup taken before the write is the
+// safety net if the retry fails.
 func renameOver(tmp, path string) error {
-	err := os.Rename(tmp, path)
+	err := renameFile(tmp, path)
 	if err == nil {
 		return nil
 	}
-	if runtime.GOOS != "windows" {
-		return err
-	}
-	// Only the "destination exists" case needs the fallback; removing a
-	// destination that is already gone would just destroy the config.
-	if _, statErr := os.Stat(path); statErr != nil {
+	if goos != "windows" || !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 	if removeErr := os.Remove(path); removeErr != nil {
-		return removeErr
+		return fmt.Errorf("removing existing config before rename: %w", removeErr)
 	}
-	return os.Rename(tmp, path)
+	if retryErr := renameFile(tmp, path); retryErr != nil {
+		return fmt.Errorf("%s was removed and the new config could not be installed; restore it from the backup: %w", path, retryErr)
+	}
+	return nil
 }
 
 // sudoHint appends the actionable hint to a permission failure, which on a
