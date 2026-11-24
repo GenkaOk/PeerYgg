@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/genkaok/PeerYgg/internal/output"
 	"github.com/genkaok/PeerYgg/internal/peer"
 	"github.com/genkaok/PeerYgg/internal/storage"
+	"github.com/genkaok/PeerYgg/internal/yggconf"
 )
 
 func main() {
@@ -142,6 +144,73 @@ func main() {
 		if err := storage.SaveLocal(cfg.Store, source.RawJSON); err != nil {
 			fmt.Fprintln(os.Stderr, "failed save local:", err)
 		}
+	}
+
+	// The results are already printed, so a failed install can exit without
+	// invalidating anything the user has seen.
+	if cfg.Install {
+		if err := installPeers(cfg, selected); err != nil {
+			fmt.Fprintln(os.Stderr, "failed install peers:", err)
+			os.Exit(1)
+		}
+	}
+}
+
+// selectedPeers returns the full peer URIs of selected results, in order.
+func selectedPeers(selected []network.Result) []string {
+	peers := make([]string, 0, len(selected))
+	for _, r := range selected {
+		peers = append(peers, r.Peer)
+	}
+	return peers
+}
+
+// installPeers writes the selected peers into the yggdrasil config named by
+// cfg and reports the result on stderr.
+func installPeers(cfg *config.Config, selected []network.Result) error {
+	peers := selectedPeers(selected)
+	if len(peers) == 0 {
+		return fmt.Errorf("no peers selected, refusing to empty the yggdrasil Peers list")
+	}
+
+	path, err := yggconf.Detect(cfg.ConfPath)
+	if err != nil {
+		return err
+	}
+
+	rep, err := yggconf.Install(yggconf.Options{
+		Path:   path,
+		Peers:  peers,
+		DryRun: cfg.DryRun,
+	})
+	if err != nil {
+		return err
+	}
+
+	printInstallReport(rep)
+	return nil
+}
+
+// printInstallReport prints what installPeers did, or would do on a dry run.
+func printInstallReport(rep *yggconf.Report) {
+	fmt.Fprintf(os.Stderr, "yggdrasil config: %s\n", rep.Path)
+	if rep.BackupPath != "" {
+		fmt.Fprintf(os.Stderr, "backup: %s\n", rep.BackupPath)
+	}
+	if rep.Unchanged {
+		fmt.Fprintln(os.Stderr, "already up to date")
+	} else {
+		fmt.Fprintf(os.Stderr, "+%d / -%d peers\n", len(rep.Added), len(rep.Removed))
+	}
+	// Install only skips validation when yggdrasil is not in PATH; a dry run
+	// and an unchanged config never reach the validation step at all.
+	if !rep.Validated && !rep.Unchanged && !rep.DryRun {
+		fmt.Fprintln(os.Stderr, "not validated (yggdrasil not found)")
+	}
+	if cmd, known := yggconf.RestartCommand(runtime.GOOS); known {
+		fmt.Fprintf(os.Stderr, "restart: %s\n", cmd)
+	} else {
+		fmt.Fprintln(os.Stderr, cmd)
 	}
 }
 
