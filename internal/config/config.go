@@ -41,6 +41,8 @@ type Config struct {
 	AddCmd       string
 	RemoveCmd    string
 	DryRun       bool
+	Install      bool
+	ConfPath     string
 	Concurrency  int
 	TimeoutSec   int
 	TopN         int
@@ -73,6 +75,16 @@ func getEnvInt(key string, def int) int {
 	return def
 }
 
+// resolveConfPath picks the yggdrasil config path: an explicit -config flag
+// wins over the PEERS_CONFIG default, so the flag can always override a stale
+// environment. An empty result means autodetect.
+func resolveConfPath(flagValue string) string {
+	if flagValue != "" {
+		return flagValue
+	}
+	return getEnv("PEERS_CONFIG", "")
+}
+
 func Load() *Config {
 	n := flag.Int("n", 5, "number of fastest peers/servers to output")
 	concurrency := flag.Int("c", DefaultConcurrency, "concurrency for pings")
@@ -90,6 +102,10 @@ func Load() *Config {
 
 	insecureSsl := flag.Bool("insecure", false, "allow skip SSL verification")
 
+	install := flag.Bool("install", false, "write selected peers into the yggdrasil config")
+	confPath := flag.String("config", "", "path to the yggdrasil config (default: autodetect)")
+	dryRun := flag.Bool("dry-run", false, "show config changes without writing")
+
 	flag.Parse()
 
 	pType := parseProgressMode(*progressMode)
@@ -105,7 +121,9 @@ func Load() *Config {
 		Store:        getEnv("PEERS_STORE", LocalStore),
 		AddCmd:       getEnv("PEERS_ADD_CMD", ""),
 		RemoveCmd:    getEnv("PEERS_REMOVE_CMD", ""),
-		DryRun:       getEnv("DRY_RUN", "") == "1",
+		DryRun:       *dryRun || getEnv("DRY_RUN", "") == "1",
+		Install:      *install,
+		ConfPath:     resolveConfPath(*confPath),
 		Concurrency:  *concurrency,
 		TimeoutSec:   *timeout,
 		TopN:         *n,

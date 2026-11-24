@@ -30,6 +30,7 @@ PeerYgg — это инструмент для поиска и анализа п
   интеграции и анализа
 - **Группировка результатов** — объединение пиров по IP-адресу для более удобного просмотра и анализа
 - **Приоритетная страна** — гарантирует пиры из выбранной страны назначения (например, `-country nl`) вместе с самыми быстрыми
+- **Установка в конфиг** — запись самых быстрых пиров в конфигурацию yggdrasil (`-install`) с автоматическим бекапом
 - **Совместимость** — Хорошая совместимость с различными типами архитектур (x64, ARM, ARMv5-7, MIPS(LE))
 
 ![demo](assets/demo.gif)
@@ -116,14 +117,20 @@ go build -o peerygg ./cmd/peerygg/main.go
 Usage of PeerYgg:
   -c int
         concurrency for pings (default 30)
+  -config string
+        path to the yggdrasil config (default: autodetect)
   -country string
         preferred destination country (slug or ISO code, e.g. nl)
   -country-count int
         number of peers to guarantee for the preferred country (default 2)
+  -dry-run
+        show config changes without writing
   -group
         group peers by host and select best connection per server
   -insecure
         allow skip SSL verification
+  -install
+        write selected peers into the yggdrasil config
   -n int
         number of fastest peers/servers to output (default 5)
   -output string
@@ -149,6 +156,28 @@ peerygg -n 5 -country nl -country-count 2
 ```
 
 Команда оставляет 5 самых быстрых пиров и добавляет к ним до 2 доступных пиров из Нидерландов, которых ещё нет в списке. Если доступных пиров в целевой стране меньше 2, недостаток добирается самыми быстрыми пирами из того же региона (для Нидерландов — `europe`). `-country` принимает slug, ISO alpha-2 код или распространённое название (`nl`, `netherlands`, `holland`). Итоговый список ограничен `n + country-count`; в стандартном выводе выбранные пиры помечаются `*` (целевая страна) или `~` (соседний регион), в таблице — колонка `PREF`. Переменные окружения: `PEERS_COUNTRY`, `PEERS_COUNTRY_COUNT`.
+
+#### Установка пиров в конфигурацию Yggdrasil
+
+`-install` записывает выбранные пиры прямо в конфигурацию демона yggdrasil:
+
+```bash
+sudo peerygg -n 5 -install
+```
+
+Заменяется только массив `Peers`. `PrivateKey`, `PrivateKeyPath`, `Listen`, `AdminListen`, `InterfacePeers`, `MulticastInterfaces`, комментарии и форматирование остальной части файла остаются нетронутыми, поэтому HJSON-конфиг, который вы правите руками, сохраняет вид. Комментарии *внутри* массива `Peers` сохраняются, но переезжают в начало массива.
+
+Перед записью всегда создаётся бекап рядом с конфигом: `<config>.bak-YYYYMMDD-HHMMSS`. Это побайтовая копия с исходными правами и, при запуске от root, владельцем. Существующий бекап никогда не перезаписывается: второй запуск в ту же секунду получит суффикс `-2` (затем `-3` и так далее). Если бекап создать не удалось, в конфиг ничего не пишется.
+
+Путь к конфигу определяется автоматически в таком порядке: `/etc/yggdrasil/yggdrasil.conf` (пакет Debian/Ubuntu), `/etc/yggdrasil.conf` (Arch, Fedora/RPM, macOS pkg, обычная сборка Linux), `/opt/etc/yggdrasil.conf` (Entware), `/usr/local/etc/yggdrasil.conf` (FreeBSD); в Windows — `%ProgramData%\Yggdrasil\yggdrasil.conf`. Переопределить можно через `-config /путь/к/yggdrasil.conf` или `PEERS_CONFIG` (если заданы оба, побеждает флаг). Если конфиг открывается через симлинк, запись идёт в его цель, так что симлинк остаётся на месте.
+
+Конфиги из пакетов обычно имеют права `0640` и принадлежат root (в Debian — `root:yggdrasil`), поэтому запускайте через `sudo`. Если файл не читается или не пишется, инструмент подскажет это в сообщении об ошибке.
+
+Если бинарь `yggdrasil` есть в `PATH`, новый конфиг проверяется через `yggdrasil -normaliseconf` до подмены оригинала; отвергнутый конфиг отменяет установку и не трогает исходный файл. Без бинаря проверка пропускается с пометкой `not validated`.
+
+Сервис автоматически не перезапускается — вместо этого печатается готовая команда (`systemctl restart yggdrasil`, `launchctl kickstart -k system/yggdrasil`, `service yggdrasil restart`, `Restart-Service Yggdrasil`). Чтобы посмотреть разницу пиров без записи, используйте `-dry-run` или `DRY_RUN=1`: пробный прогон напечатает `dry run: nothing written` и не будет предлагать команду рестарта.
+
+OpenWrt с текущим пакетом на netifd не поддерживается: там нет `yggdrasil.conf`, пиры берутся из UCI (`/etc/config/network`), поэтому PeerYgg отказывается его трогать.
 
 #### Форматы вывода
 
